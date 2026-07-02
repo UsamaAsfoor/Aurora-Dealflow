@@ -1,0 +1,15 @@
+{
+  "expo": {
+    "name": "Aurora DealFlow",
+    "slug": "aurora-dealflow",
+    "version": "1.0.0",
+    "scheme": "aurora-dealflow",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "plugins": ["expo-router", "expo-secure-store"],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "name": "@aurora/integrations",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo 'no lint configured'"
+  },
+  "dependencies": {
+    "@aurora/core": "workspace:*",
+    "@aurora/db": "workspace:*",
+    "drizzle-orm": "^0.44.2",
+    "openai": "^5.8.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3"
+  }
+}
