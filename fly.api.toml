@@ -23,6 +23,3 @@ primary_region = "sjc"
     grace_period = "20s"
     method = "GET"
     path = "/health"
-
-[deploy]
-  release_command = "node packages/db/dist/migrate.js"
