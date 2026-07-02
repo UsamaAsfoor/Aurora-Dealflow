@@ -17,7 +17,7 @@ if ! fly postgres list 2>/dev/null | grep -q "${DB_APP}"; then
     --name "${DB_APP}" \
     --region "${REGION}" \
     --initial-cluster-size 1 \
-    --vm-size shared-cpu-1x \
+    --vm-size shared-cpu-1x:1024MB \
     --volume-size 3
 fi
 
