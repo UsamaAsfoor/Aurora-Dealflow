@@ -12,18 +12,39 @@ interface PropertyMapProps {
   results: SearchResultItem[];
   onPropertyClick?: (attomId: string) => void;
   onPolygonChange?: (polygon: Array<{ lat: number; lng: number }> | null) => void;
+  selectedId?: string | null;
   center?: [number, number];
+  className?: string;
+}
+
+function shortPrice(value: number | null): string {
+  if (value == null) return "—";
+  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 1_000) return `$${Math.round(value / 1_000)}K`;
+  return formatCurrency(value);
 }
 
 export function PropertyMap({
   results,
   onPropertyClick,
   onPolygonChange,
+  selectedId,
   center = [-89.65, 39.78],
+  className,
 }: PropertyMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const drawRef = useRef<MapboxDraw | null>(null);
+  const onPropertyClickRef = useRef(onPropertyClick);
+  const onPolygonChangeRef = useRef(onPolygonChange);
+
+  useEffect(() => {
+    onPropertyClickRef.current = onPropertyClick;
+  }, [onPropertyClick]);
+
+  useEffect(() => {
+    onPolygonChangeRef.current = onPolygonChange;
+  }, [onPolygonChange]);
 
   useEffect(() => {
     const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
@@ -35,12 +56,12 @@ export function PropertyMap({
 
     const map = new mapboxgl.Map({
       container: containerRef.current,
-      style: "mapbox://styles/mapbox/light-v11",
+      style: "mapbox://styles/mapbox/streets-v12",
       center,
       zoom: 11,
     });
 
-    map.addControl(new mapboxgl.NavigationControl(), "top-right");
+    map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), "bottom-right");
 
     const draw = new MapboxDraw({
       displayControlsDefault: false,
@@ -50,7 +71,7 @@ export function PropertyMap({
       },
     });
 
-    map.addControl(draw, "top-left");
+    map.addControl(draw, "bottom-right");
     mapRef.current = map;
     drawRef.current = draw;
 
@@ -90,6 +111,7 @@ export function PropertyMap({
         layout: {
           "text-field": "{point_count_abbreviated}",
           "text-size": 12,
+          "text-font": ["DIN Pro Medium", "Arial Unicode MS Bold"],
         },
         paint: { "text-color": "#ffffff" },
       });
@@ -100,10 +122,39 @@ export function PropertyMap({
         source: "properties",
         filter: ["!", ["has", "point_count"]],
         paint: {
-          "circle-color": "#2563eb",
-          "circle-radius": 8,
+          "circle-color": [
+            "case",
+            ["==", ["get", "selected"], 1],
+            "#1d4ed8",
+            "#2563eb",
+          ],
+          "circle-radius": [
+            "case",
+            ["==", ["get", "selected"], 1],
+            10,
+            7,
+          ],
           "circle-stroke-width": 2,
           "circle-stroke-color": "#ffffff",
+        },
+      });
+
+      map.addLayer({
+        id: "unclustered-label",
+        type: "symbol",
+        source: "properties",
+        filter: ["!", ["has", "point_count"]],
+        layout: {
+          "text-field": ["get", "priceShort"],
+          "text-size": 11,
+          "text-offset": [0, -1.6],
+          "text-anchor": "bottom",
+          "text-font": ["DIN Pro Medium", "Arial Unicode MS Bold"],
+        },
+        paint: {
+          "text-color": "#0f172a",
+          "text-halo-color": "#ffffff",
+          "text-halo-width": 1.5,
         },
       });
 
@@ -130,14 +181,21 @@ export function PropertyMap({
       map.on("click", "unclustered-point", (e) => {
         const feature = e.features?.[0];
         const attomId = feature?.properties?.attomId as string | undefined;
-        if (attomId && onPropertyClick) {
-          onPropertyClick(attomId);
-        }
+        if (attomId) onPropertyClickRef.current?.(attomId);
       });
 
-      map.on("draw.create", updatePolygon);
-      map.on("draw.update", updatePolygon);
-      map.on("draw.delete", () => onPolygonChange?.(null));
+      map.on("click", "unclustered-label", (e) => {
+        const feature = e.features?.[0];
+        const attomId = feature?.properties?.attomId as string | undefined;
+        if (attomId) onPropertyClickRef.current?.(attomId);
+      });
+
+      map.on("mouseenter", "unclustered-point", () => {
+        map.getCanvas().style.cursor = "pointer";
+      });
+      map.on("mouseleave", "unclustered-point", () => {
+        map.getCanvas().style.cursor = "";
+      });
 
       function updatePolygon() {
         const data = draw.getAll();
@@ -149,9 +207,13 @@ export function PropertyMap({
                 point[0] != null && point[1] != null,
             )
             .map(([lng, lat]) => ({ lat, lng }));
-          onPolygonChange?.(coords ?? null);
+          onPolygonChangeRef.current?.(coords ?? null);
         }
       }
+
+      map.on("draw.create", updatePolygon);
+      map.on("draw.update", updatePolygon);
+      map.on("draw.delete", () => onPolygonChangeRef.current?.(null));
     });
 
     return () => {
@@ -159,35 +221,18 @@ export function PropertyMap({
       mapRef.current = null;
       drawRef.current = null;
     };
-  }, [center, onPolygonChange, onPropertyClick]);
+    // center only used for initial map — avoid remount loops
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !map.isStyleLoaded()) return;
+    if (!map) return;
 
-    const source = map.getSource("properties") as mapboxgl.GeoJSONSource | undefined;
-    if (!source) return;
+    const apply = () => {
+      const source = map.getSource("properties") as mapboxgl.GeoJSONSource | undefined;
+      if (!source) return;
 
-    const features = results
-      .filter((r) => r.address)
-      .map((result) => ({
-        type: "Feature" as const,
-        properties: {
-          attomId: result.attomId,
-          price: formatCurrency(result.estimatedValue),
-          score: result.score ?? 0,
-        },
-        geometry: {
-          type: "Point" as const,
-          coordinates: [
-            result.address.state === "HI" ? -158.0001 : -89.6501,
-            result.address.state === "HI" ? 21.4389 : 39.7817,
-          ],
-        },
-      }));
-
-    // Use actual lat/lng from search results when available via a lookup
-    const featuresWithCoords = results.map((result, index) => {
       const demoCoords: Record<string, [number, number]> = {
         "demo-1001": [-89.6501, 39.7817],
         "demo-1002": [-77.0365, 38.8977],
@@ -196,54 +241,72 @@ export function PropertyMap({
         "demo-1005": [-73.9857, 40.7484],
       };
 
-      const coords: [number, number] =
-        result.latitude && result.longitude
-          ? [result.longitude, result.latitude]
-          : (demoCoords[result.attomId] ?? [
-              center[0] + index * 0.01,
-              center[1] + index * 0.005,
-            ]);
+      const featuresWithCoords = results.map((result, index) => {
+        const coords: [number, number] =
+          result.latitude && result.longitude
+            ? [result.longitude, result.latitude]
+            : (demoCoords[result.attomId] ?? [
+                center[0] + index * 0.01,
+                center[1] + index * 0.005,
+              ]);
 
-      return {
-        type: "Feature" as const,
-        properties: {
-          attomId: result.attomId,
-          price: formatCurrency(result.estimatedValue),
-          score: result.score ?? 0,
-        },
-        geometry: {
-          type: "Point" as const,
-          coordinates: coords,
-        },
-      };
-    });
-
-    source.setData({
-      type: "FeatureCollection",
-      features: featuresWithCoords.length > 0 ? featuresWithCoords : features,
-    });
-
-    if (featuresWithCoords.length > 0) {
-      const bounds = new mapboxgl.LngLatBounds();
-      featuresWithCoords.forEach((f) => {
-        const [lng, lat] = f.geometry.coordinates as [number, number];
-        bounds.extend([lng, lat]);
+        return {
+          type: "Feature" as const,
+          properties: {
+            attomId: result.attomId,
+            price: formatCurrency(result.estimatedValue),
+            priceShort: shortPrice(result.estimatedValue),
+            score: result.score ?? 0,
+            selected: selectedId === result.attomId ? 1 : 0,
+          },
+          geometry: {
+            type: "Point" as const,
+            coordinates: coords,
+          },
+        };
       });
-      map.fitBounds(bounds, { padding: 60, maxZoom: 13 });
-    }
-  }, [results, center]);
+
+      source.setData({
+        type: "FeatureCollection",
+        features: featuresWithCoords,
+      });
+
+      if (featuresWithCoords.length > 0) {
+        const bounds = new mapboxgl.LngLatBounds();
+        featuresWithCoords.forEach((f) => {
+          const [lng, lat] = f.geometry.coordinates as [number, number];
+          bounds.extend([lng, lat]);
+        });
+        map.fitBounds(bounds, { padding: 80, maxZoom: 14 });
+      }
+    };
+
+    if (map.isStyleLoaded()) apply();
+    else map.once("load", apply);
+  }, [results, center, selectedId]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !selectedId) return;
+    const selected = results.find((r) => r.attomId === selectedId);
+    if (!selected?.latitude || !selected.longitude) return;
+    map.easeTo({
+      center: [selected.longitude, selected.latitude],
+      zoom: Math.max(map.getZoom(), 14),
+    });
+  }, [selectedId, results]);
 
   const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
   if (!token || token.includes("your_mapbox")) {
     return (
-      <div className="flex h-full items-center justify-center bg-slate-50 p-6 text-center text-sm text-slate-500">
-        Set NEXT_PUBLIC_MAPBOX_TOKEN to enable the map. Search results will still
+      <div className="flex h-full items-center justify-center bg-slate-100 p-6 text-center text-sm text-slate-500">
+        Set NEXT_PUBLIC_MAPBOX_TOKEN to enable the map. Search results still
         appear in the list.
       </div>
     );
   }
 
-  return <div ref={containerRef} className="h-full w-full" />;
+  return <div ref={containerRef} className={className ?? "h-full w-full"} />;
 }
 
 interface SinglePropertyMapProps {
@@ -269,7 +332,7 @@ export function SinglePropertyMap({
 
     const map = new mapboxgl.Map({
       container: containerRef.current,
-      style: "mapbox://styles/mapbox/light-v11",
+      style: "mapbox://styles/mapbox/streets-v12",
       center: [longitude, latitude],
       zoom: 15,
     });
@@ -277,7 +340,10 @@ export function SinglePropertyMap({
     new mapboxgl.Marker().setLngLat([longitude, latitude]).addTo(map);
 
     if (label) {
-      new mapboxgl.Popup({ offset: 24 }).setText(label).setLngLat([longitude, latitude]).addTo(map);
+      new mapboxgl.Popup({ offset: 24 })
+        .setText(label)
+        .setLngLat([longitude, latitude])
+        .addTo(map);
     }
 
     return () => map.remove();

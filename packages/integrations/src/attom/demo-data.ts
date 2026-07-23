@@ -197,6 +197,7 @@ export const demoProperties: NormalizedProperty[] = [
     isVacant: true,
     isPreForeclosure: true,
     ownershipYears: 7,
+    vacancyMonths: 9,
   },
   {
     attomId: "demo-1004",
@@ -314,6 +315,143 @@ export const demoProperties: NormalizedProperty[] = [
     isPreForeclosure: false,
     ownershipYears: 24,
   },
+  {
+    attomId: "demo-1006",
+    address: {
+      line1: "901 Maple Avenue",
+      city: "Springfield",
+      state: "IL",
+      zip: "62704",
+      county: "Sangamon",
+    },
+    latitude: 39.785,
+    longitude: -89.648,
+    propertyType: "single_family",
+    beds: 3,
+    baths: 2,
+    sqft: 1850,
+    lotSqft: 7200,
+    yearBuilt: 1978,
+    owner: {
+      name: "Maple Holdings LLC",
+      mailingAddress: {
+        line1: "901 Maple Avenue",
+        city: "Springfield",
+        state: "IL",
+        zip: "62704",
+      },
+      isAbsentee: false,
+    },
+    valuation: {
+      avm: 245000,
+      assessedValue: 198000,
+      estimatedMortgageBalance: 120000,
+      estimatedEquity: 125000,
+      equityPercent: 51,
+    },
+    tax: { annualAmount: 3600, isDelinquent: false, delinquentAmount: null },
+    sales: [],
+    comps: [],
+    isVacant: false,
+    isPreForeclosure: false,
+    ownershipYears: 6,
+    mlsNumber: "MLS456789",
+    listingStatus: "active",
+    isExpiredListing: false,
+    isEmlsListing: false,
+  },
+  {
+    attomId: "demo-1007",
+    address: {
+      line1: "1440 Oak Street",
+      city: "Springfield",
+      state: "IL",
+      zip: "62704",
+      county: "Sangamon",
+    },
+    latitude: 39.779,
+    longitude: -89.655,
+    propertyType: "single_family",
+    beds: 4,
+    baths: 2,
+    sqft: 2100,
+    lotSqft: 9000,
+    yearBuilt: 1965,
+    owner: {
+      name: "Patricia Lane",
+      mailingAddress: {
+        line1: "88 Sunset Blvd",
+        city: "Phoenix",
+        state: "AZ",
+        zip: "85001",
+      },
+      isAbsentee: true,
+    },
+    valuation: {
+      avm: 198000,
+      assessedValue: 165000,
+      estimatedMortgageBalance: 40000,
+      estimatedEquity: 158000,
+      equityPercent: 79.8,
+    },
+    tax: { annualAmount: 2900, isDelinquent: false, delinquentAmount: null },
+    sales: [],
+    comps: [],
+    isVacant: true,
+    isPreForeclosure: false,
+    ownershipYears: 14,
+    vacancyMonths: 18,
+    mlsNumber: "EMLS789012",
+    emlsStatus: "expired",
+    isEmlsListing: true,
+    isExpiredListing: false,
+  },
+  {
+    attomId: "demo-1008",
+    address: {
+      line1: "310 Elm Court",
+      city: "Springfield",
+      state: "IL",
+      zip: "62704",
+      county: "Sangamon",
+    },
+    latitude: 39.783,
+    longitude: -89.652,
+    propertyType: "single_family",
+    beds: 3,
+    baths: 1.5,
+    sqft: 1600,
+    lotSqft: 6500,
+    yearBuilt: 1952,
+    owner: {
+      name: "Robert Chen",
+      mailingAddress: {
+        line1: "310 Elm Court",
+        city: "Springfield",
+        state: "IL",
+        zip: "62704",
+      },
+      isAbsentee: false,
+    },
+    valuation: {
+      avm: 172000,
+      assessedValue: 140000,
+      estimatedMortgageBalance: 95000,
+      estimatedEquity: 77000,
+      equityPercent: 44.8,
+    },
+    tax: { annualAmount: 2500, isDelinquent: false, delinquentAmount: null },
+    sales: [],
+    comps: [],
+    isVacant: false,
+    isPreForeclosure: false,
+    ownershipYears: 8,
+    mlsNumber: "MLS998877",
+    listingStatus: "expired",
+    daysExpired: 45,
+    isExpiredListing: true,
+    isEmlsListing: false,
+  },
 ];
 
 function applyFilters(
@@ -347,6 +485,13 @@ function applyFilters(
 
   if (params.zip) {
     filtered = filtered.filter((r) => r.address.zip.startsWith(params.zip!));
+  }
+
+  if (params.county) {
+    const county = params.county.toLowerCase();
+    filtered = filtered.filter((r) =>
+      r.address.county?.toLowerCase().includes(county),
+    );
   }
 
   if (filters?.propertyTypes?.length) {
@@ -391,6 +536,43 @@ function applyFilters(
 
   if (filters?.minScore != null) {
     filtered = filtered.filter((r) => (r.score ?? 0) >= filters.minScore!);
+  }
+
+  if (filters?.mlsNumber) {
+    const mls = filters.mlsNumber.toLowerCase();
+    filtered = filtered.filter((r) =>
+      r.mlsNumber?.toLowerCase().includes(mls),
+    );
+  }
+
+  if (filters?.listingStatus) {
+    filtered = filtered.filter(
+      (r) => r.listingStatus === filters.listingStatus,
+    );
+  }
+
+  if (filters?.emlsStatus) {
+    filtered = filtered.filter((r) => r.emlsStatus === filters.emlsStatus);
+  }
+
+  if (filters?.minDaysExpired != null) {
+    filtered = filtered.filter(
+      (r) => (r.daysExpired ?? 0) >= filters.minDaysExpired!,
+    );
+  }
+
+  if (filters?.minVacancyMonths != null) {
+    filtered = filtered.filter(
+      (r) => (r.vacancyMonths ?? 0) >= filters.minVacancyMonths!,
+    );
+  }
+
+  if (filters?.searchMode === "expired_listings") {
+    filtered = filtered.filter((r) => r.isExpiredListing);
+  }
+
+  if (filters?.searchMode === "emls") {
+    filtered = filtered.filter((r) => r.isEmlsListing);
   }
 
   if (params.sortBy === "score") {

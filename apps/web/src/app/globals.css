@@ -112,3 +112,147 @@ select {
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(100, 116, 139, 0.5);
 }
+
+/* PropStream-style map search */
+
+.ps-search-stage {
+  background: #e8eef5;
+}
+
+.ps-top-bar {
+  animation: psSlideDown 0.28s ease-out;
+}
+
+.ps-suggest-panel {
+  animation: psFadeUp 0.18s ease-out;
+}
+
+.ps-results-rail {
+  animation: psRailIn 0.28s ease-out;
+}
+
+.ps-filters-overlay {
+  animation: psFade 0.18s ease-out;
+}
+
+.ps-filters-panel {
+  animation: psSlideInRight 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.ps-map-card {
+  animation: psFadeUp 0.22s ease-out;
+}
+
+.ps-chip {
+  animation: psChipIn 0.18s ease-out;
+}
+
+.ps-lead-list-card:active {
+  transform: scale(0.98);
+}
+
+.ps-result-card:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: -2px;
+}
+
+@keyframes psSlideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes psFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes psRailIn {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (min-width: 640px) {
+  @keyframes psRailIn {
+    from {
+      opacity: 0;
+      transform: translateX(-12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+}
+
+@keyframes psSlideInRight {
+  from {
+    opacity: 0.6;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes psFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes psChipIn {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Legacy stepped-search helpers (unused primary path) */
+.search-workspace-panel {
+  animation: psFadeUp 0.35s ease-out;
+}
+
+.search-distress-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 9999px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  padding: 0.625rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #475569;
+}
+
+.search-distress-chip-active {
+  border-color: transparent;
+  background: #2563eb;
+  color: #ffffff;
+}

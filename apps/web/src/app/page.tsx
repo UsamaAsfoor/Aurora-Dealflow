@@ -7,9 +7,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 const features = [
   {
     icon: MapPin,
-    title: "Property Search",
+    title: "Intent-Driven Search",
     description:
-      "Search by address, city, zip, or draw an area on the map. Filter by equity, absentee owner, vacancy, and distress signals.",
+      "Start with county, ZIP, or city—pick a distress intent like vacant, absentee, MLS, or EMLS—and Aurora shows only the filters that matter.",
   },
   {
     icon: Brain,
@@ -19,9 +19,9 @@ const features = [
   },
   {
     icon: Target,
-    title: "Save as Lead",
+    title: "Build Lists Fast",
     description:
-      "Snapshot properties into your pipeline with owner, valuation, tax, and sale history data preserved locally.",
+      "Designed for list-building workflows—snapshot properties into your pipeline with owner, valuation, and distress data preserved.",
   },
 ];
 
@@ -45,8 +45,8 @@ export default function HomePage() {
               Score deals. Close faster.
             </h1>
             <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-slate-600">
-              Aurora DealFlow combines ATTOM property data, AI-powered opportunity
-              scoring, and a CRM pipeline built for real estate investors.
+              Choose your market, pick a distress intent, and build property lists
+              faster than static search forms—powered by ATTOM data and AI scoring.
             </p>
             <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
               <Button size="lg" asChild>

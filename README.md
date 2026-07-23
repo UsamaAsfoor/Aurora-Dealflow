@@ -36,6 +36,7 @@ DATABASE_URL=postgresql://aurora:aurora@localhost:5434/aurora_dealflow
 JWT_SECRET=change-this-to-a-long-random-secret-at-least-32-characters
 PORT=4001
 WEB_ORIGIN=http://localhost:3001
+ATTOM_API_KEY=your_attom_api_key
 ATTOM_USE_DEMO=true
 OPENAI_USE_DEMO=true
 ```
@@ -48,6 +49,14 @@ NEXT_PUBLIC_MAPBOX_TOKEN=pk....
 ```
 
 See `.env.example` for all variables.
+
+To use **live ATTOM data** (not demo):
+
+1. Get an API key from [ATTOM Developer](https://api.developer.attomdata.com) → Account → Applications
+2. Set `ATTOM_API_KEY=<your key>` and `ATTOM_USE_DEMO=false` in `apps/api/.env`
+3. Restart the API
+
+Live search uses `/property/snapshot` (area lists) and detail uses `/property/expandedprofile` + AVM/assessment/comps. See [ATTOM guides](https://api.developer.attomdata.com/docs/guides).
 
 ### 4. Run migrations and seed
 
@@ -71,7 +80,7 @@ Open `/login` to sign up with email and password. JWT tokens are stored in the b
 
 ## Demo Mode
 
-When ATTOM/OpenAI keys are missing, the app uses built-in demo properties (Springfield IL, Albuquerque NM, etc.) so you can test the full flow without API credentials.
+When `ATTOM_USE_DEMO=true` or `ATTOM_API_KEY` is missing/placeholder, the app uses built-in demo properties (Springfield IL, Albuquerque NM, etc.) so you can test the full flow without API credentials. The same applies for OpenAI when `OPENAI_USE_DEMO=true`.
 
 ## Project Structure
 

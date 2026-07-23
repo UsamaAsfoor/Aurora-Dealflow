@@ -27,6 +27,28 @@ const searchFiltersSchema = z.object({
   taxDelinquentOnly: z.boolean().optional(),
   recentlySoldDays: z.number().optional(),
   minScore: z.number().optional(),
+  searchMode: z
+    .enum([
+      "list_building",
+      "vacant",
+      "absentee",
+      "pre_foreclosure",
+      "tax_delinquent",
+      "expired_listings",
+      "mls_lookup",
+      "emls",
+      "specific_property",
+      "radius_search",
+    ])
+    .optional(),
+  mlsNumber: z.string().optional(),
+  listingStatus: z.string().optional(),
+  emlsStatus: z.string().optional(),
+  minDaysExpired: z.number().optional(),
+  minVacancyMonths: z.number().optional(),
+  outOfStateOnly: z.boolean().optional(),
+  minDelinquentAmount: z.number().optional(),
+  minDelinquentYears: z.number().optional(),
 });
 
 const searchInputSchema = z.object({
@@ -65,6 +87,13 @@ function applyClientFilters<
     isPreForeclosure: boolean;
     isTaxDelinquent: boolean;
     score?: number;
+    mlsNumber?: string | null;
+    listingStatus?: string | null;
+    emlsStatus?: string | null;
+    daysExpired?: number | null;
+    vacancyMonths?: number | null;
+    isExpiredListing?: boolean;
+    isEmlsListing?: boolean;
   },
 >(results: T[], filters?: z.infer<typeof searchFiltersSchema>): T[] {
   if (!filters) return results;
@@ -96,6 +125,39 @@ function applyClientFilters<
     if (filters.preForeclosureOnly && !result.isPreForeclosure) return false;
     if (filters.taxDelinquentOnly && !result.isTaxDelinquent) return false;
     if (filters.minScore != null && (result.score ?? 0) < filters.minScore) {
+      return false;
+    }
+    if (
+      filters.mlsNumber &&
+      !result.mlsNumber?.toLowerCase().includes(filters.mlsNumber.toLowerCase())
+    ) {
+      return false;
+    }
+    if (
+      filters.listingStatus &&
+      result.listingStatus !== filters.listingStatus
+    ) {
+      return false;
+    }
+    if (filters.emlsStatus && result.emlsStatus !== filters.emlsStatus) {
+      return false;
+    }
+    if (
+      filters.minDaysExpired != null &&
+      (result.daysExpired ?? 0) < filters.minDaysExpired
+    ) {
+      return false;
+    }
+    if (
+      filters.minVacancyMonths != null &&
+      (result.vacancyMonths ?? 0) < filters.minVacancyMonths
+    ) {
+      return false;
+    }
+    if (filters.searchMode === "expired_listings" && !result.isExpiredListing) {
+      return false;
+    }
+    if (filters.searchMode === "emls" && !result.isEmlsListing) {
       return false;
     }
     return true;
@@ -150,7 +212,39 @@ export const propertyRouter = router({
         }),
     }));
 
-    results = applyClientFilters(results, input.filters);
+    const filters = { ...input.filters };
+    if (!ctx.attom.isDemoMode()) {
+      // Live /property/snapshot often lacks these flags — don't wipe the list
+      delete filters.vacantOnly;
+      delete filters.minVacancyMonths;
+      delete filters.preForeclosureOnly;
+      delete filters.taxDelinquentOnly;
+      delete filters.minDelinquentAmount;
+      delete filters.minDelinquentYears;
+      delete filters.outOfStateOnly;
+      delete filters.minOwnershipYears;
+      // Snapshot rarely includes equity; treating null as 0 would empty the list
+      delete filters.minEquityPercent;
+      delete filters.maxEquityPercent;
+      // Absentee was already requested from ATTOM via absenteeowner=absentee
+      if (filters.absenteeOnly) {
+        results = results.map((result) => ({ ...result, isAbsentee: true }));
+      }
+      // These modes are demo-only stubs until listing data is wired
+      if (
+        filters.searchMode === "expired_listings" ||
+        filters.searchMode === "emls" ||
+        filters.searchMode === "mls_lookup"
+      ) {
+        delete filters.searchMode;
+        delete filters.minDaysExpired;
+        delete filters.mlsNumber;
+        delete filters.listingStatus;
+        delete filters.emlsStatus;
+      }
+    }
+
+    results = applyClientFilters(results, filters);
     results = sortResults(results, input.sortBy, input.sortOrder);
 
     return {

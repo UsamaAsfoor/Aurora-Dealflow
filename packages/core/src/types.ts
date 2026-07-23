@@ -92,7 +92,26 @@ export interface NormalizedProperty {
   isVacant: boolean;
   isPreForeclosure: boolean;
   ownershipYears: number | null;
+  mlsNumber?: string | null;
+  listingStatus?: string | null;
+  emlsStatus?: string | null;
+  daysExpired?: number | null;
+  vacancyMonths?: number | null;
+  isExpiredListing?: boolean;
+  isEmlsListing?: boolean;
 }
+
+export type SearchMode =
+  | "list_building"
+  | "vacant"
+  | "absentee"
+  | "pre_foreclosure"
+  | "tax_delinquent"
+  | "expired_listings"
+  | "mls_lookup"
+  | "emls"
+  | "specific_property"
+  | "radius_search";
 
 export interface PropertySearchFilters {
   propertyTypes?: PropertyType[];
@@ -107,6 +126,15 @@ export interface PropertySearchFilters {
   taxDelinquentOnly?: boolean;
   recentlySoldDays?: number;
   minScore?: number;
+  searchMode?: SearchMode;
+  mlsNumber?: string;
+  listingStatus?: string;
+  emlsStatus?: string;
+  minDaysExpired?: number;
+  minVacancyMonths?: number;
+  outOfStateOnly?: boolean;
+  minDelinquentAmount?: number;
+  minDelinquentYears?: number;
 }
 
 export interface PropertySearchParams {
@@ -149,6 +177,13 @@ export interface PropertySearchResult {
   isPreForeclosure: boolean;
   isTaxDelinquent: boolean;
   score?: number;
+  mlsNumber?: string | null;
+  listingStatus?: string | null;
+  emlsStatus?: string | null;
+  daysExpired?: number | null;
+  vacancyMonths?: number | null;
+  isExpiredListing?: boolean;
+  isEmlsListing?: boolean;
 }
 
 export interface SignalScore {

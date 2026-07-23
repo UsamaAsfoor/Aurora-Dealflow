@@ -1,7 +1,9 @@
-export { AttomClient, mapPropertyType } from "./attom/client.js";
+export { AttomClient } from "./attom/client.js";
+export { mapPropertyType } from "./attom/map-property-type.js";
 export { demoProperties, demoSearch } from "./attom/demo-data.js";
 export {
   normalizeAttomProperty,
+  normalizeComp,
   normalizeSearchResult,
   normalizedToSearchResult,
 } from "./attom/normalize.js";
