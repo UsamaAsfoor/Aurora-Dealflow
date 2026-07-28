@@ -27,7 +27,7 @@ interface FiltersPanelProps {
 type CategoryKey = "lead" | "owner" | "value" | "distress" | "location";
 
 const CATEGORIES: Array<{ key: CategoryKey; label: string }> = [
-  { key: "lead", label: "Lead Lists" },
+  { key: "lead", label: "Opportunity Modes" },
   { key: "owner", label: "Owner & Occupancy" },
   { key: "value", label: "Value & Equity" },
   { key: "distress", label: "Distress & MLS" },
@@ -69,21 +69,21 @@ export function FiltersPanel({
   if (!open) return null;
 
   return (
-    <div className="ps-filters-overlay fixed inset-0 z-[60] flex justify-end">
+    <div className="ac-filters-overlay fixed inset-0 z-[60] flex justify-end">
       <button
         type="button"
-        className="absolute inset-0 bg-slate-900/35 backdrop-blur-[1px]"
+        className="absolute inset-0 bg-black/70 backdrop-blur-[1px]"
         aria-label="Close filters"
         onClick={onClose}
       />
-      <aside className="ps-filters-panel relative flex h-full w-full max-w-xl flex-col bg-white shadow-2xl shadow-slate-900/20">
-        <header className="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
+      <aside className="ac-filters-panel relative flex h-full w-full max-w-xl flex-col bg-[var(--aurora-surface)] shadow-2xl shadow-black/40 ring-1 ring-[var(--color-border)]">
+        <header className="flex items-center justify-between gap-3 border-b border-[var(--color-border)] px-5 py-4">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-              Search filters
+            <p className="text-xs font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
+              Refine
             </p>
-            <h2 className="text-lg font-semibold text-slate-900">
-              Refine your lead list
+            <h2 className="text-lg font-semibold text-[var(--color-foreground)]">
+              Filters
             </h2>
           </div>
           <div className="flex items-center gap-2">
@@ -103,7 +103,7 @@ export function FiltersPanel({
             </Button>
             <button
               type="button"
-              className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
+              className="rounded-lg p-2 text-[var(--color-muted-foreground)] hover:bg-[var(--color-accent)]"
               onClick={onClose}
             >
               <X className="h-5 w-5" />
@@ -111,18 +111,18 @@ export function FiltersPanel({
           </div>
         </header>
 
-        <div className="border-b border-slate-100 px-5 py-3">
-          <div className="flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2 ring-1 ring-slate-200">
-            <Search className="h-4 w-4 text-slate-400" />
+        <div className="border-b border-[var(--color-border)] px-5 py-3">
+          <div className="flex items-center gap-2 rounded-xl bg-[var(--aurora-input)] px-3 py-2 ring-1 ring-[var(--color-border)]">
+            <Search className="h-4 w-4 text-[var(--color-muted-foreground)]" />
             <input
               value={filterQuery}
               onChange={(e) => setFilterQuery(e.target.value)}
               placeholder="Find a filter…"
-              className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400"
+              className="w-full bg-transparent text-sm outline-none placeholder:text-[var(--color-muted-foreground)]"
             />
           </div>
           {!ready && (
-            <p className="mt-2 text-xs text-amber-700">
+            <p className="mt-2 text-xs text-[var(--color-primary)]">
               Select a location (ZIP works best, e.g. 62704) before viewing properties.
             </p>
           )}
@@ -136,11 +136,11 @@ export function FiltersPanel({
             return (
               <section
                 key={category.key}
-                className="overflow-hidden rounded-xl ring-1 ring-slate-200"
+                className="overflow-hidden rounded-xl ring-1 ring-[var(--color-border)]"
               >
                 <button
                   type="button"
-                  className="flex w-full items-center justify-between bg-slate-50 px-4 py-3 text-left"
+                  className="flex w-full items-center justify-between bg-[var(--aurora-input)] px-4 py-3 text-left"
                   onClick={() =>
                     setOpenCategories((prev) => ({
                       ...prev,
@@ -148,12 +148,12 @@ export function FiltersPanel({
                     }))
                   }
                 >
-                  <span className="text-sm font-semibold text-slate-800">
+                  <span className="text-sm font-semibold text-[var(--color-foreground)]">
                     {category.label}
                   </span>
                   <ChevronDown
                     className={cn(
-                      "h-4 w-4 text-slate-500 transition-transform",
+                      "h-4 w-4 text-[var(--color-muted-foreground)] transition-transform",
                       openCategories[category.key] && "rotate-180",
                     )}
                   />
@@ -162,7 +162,7 @@ export function FiltersPanel({
                 {openCategories[category.key] && (
                   <div className="space-y-3 px-4 py-3">
                     {category.key === "lead" && (
-                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                      <div className="space-y-1">
                         {visibleIntents.map((intent) => {
                           const Icon = intent.icon;
                           const active = state.intent === intent.key;
@@ -177,31 +177,22 @@ export function FiltersPanel({
                                 })
                               }
                               className={cn(
-                                "ps-lead-list-card flex flex-col items-start gap-2 rounded-xl px-3 py-3 text-left transition-all",
+                                "ac-mode-row flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left transition-all",
                                 active
-                                  ? "bg-blue-600 text-white shadow-md shadow-blue-600/25"
-                                  : "bg-white text-slate-700 ring-1 ring-slate-200 hover:ring-blue-300",
+                                  ? "bg-[var(--color-accent)] text-[var(--color-primary)] ring-1 ring-[var(--color-primary)]/40"
+                                  : "bg-[var(--aurora-input)] text-[var(--color-muted-foreground)] ring-1 ring-[var(--color-border)] hover:ring-[var(--color-border)]",
                               )}
                             >
-                              <Icon
-                                className={cn(
-                                  "h-4 w-4",
-                                  active ? "text-blue-100" : "text-blue-600",
-                                )}
-                              />
-                              <span className="text-xs font-semibold leading-tight">
-                                {intent.label}
-                              </span>
-                              {intent.stub && (
-                                <span
-                                  className={cn(
-                                    "text-[10px] uppercase tracking-wide",
-                                    active ? "text-blue-100" : "text-slate-400",
-                                  )}
-                                >
-                                  Demo
+                              <Icon className="h-4 w-4 shrink-0" />
+                              <span className="min-w-0 flex-1">
+                                <span className="block text-sm font-semibold">
+                                  {intent.label}
                                 </span>
-                              )}
+                                <span className="block truncate text-[11px] opacity-70">
+                                  {intent.description}
+                                  {intent.stub ? " · Limited live data" : ""}
+                                </span>
+                              </span>
                             </button>
                           );
                         })}
@@ -226,7 +217,7 @@ export function FiltersPanel({
                         <div>
                           <Label>Out-of-state only</Label>
                           <select
-                            className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                            className="mt-1.5 w-full rounded-lg border border-[var(--color-border)] bg-white px-3 py-2 text-sm"
                             value={state.intentFields.outOfStateOnly ?? ""}
                             onChange={(e) =>
                               onChange({
@@ -275,7 +266,7 @@ export function FiltersPanel({
                         <div className="sm:col-span-2">
                           <Label>Sort by</Label>
                           <select
-                            className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                            className="mt-1.5 w-full rounded-lg border border-[var(--color-border)] bg-white px-3 py-2 text-sm"
                             value={state.sortBy}
                             onChange={(e) =>
                               onChange({
@@ -312,7 +303,7 @@ export function FiltersPanel({
                               <div key={field.key}>
                                 <Label>{field.label}</Label>
                                 <select
-                                  className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                                  className="mt-1.5 w-full rounded-lg border border-[var(--color-border)] bg-white px-3 py-2 text-sm"
                                   value={state.intentFields[field.key] ?? ""}
                                   onChange={(e) =>
                                     onChange({
@@ -359,8 +350,8 @@ export function FiltersPanel({
                             "foreclosureStage",
                           ].includes(f.key),
                         ).length === 0 && (
-                          <p className="text-xs text-slate-500 sm:col-span-2">
-                            Choose a Lead List above to unlock distress-specific
+                          <p className="text-xs text-[var(--color-muted-foreground)] sm:col-span-2">
+                            Choose an Opportunity Mode above to unlock distress-specific
                             filters.
                           </p>
                         )}
@@ -406,7 +397,7 @@ export function FiltersPanel({
           })}
         </div>
 
-        <footer className="border-t border-slate-200 px-5 py-4">
+        <footer className="border-t border-[var(--color-border)] px-5 py-4">
           <Button
             className="w-full"
             size="lg"

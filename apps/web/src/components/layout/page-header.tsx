@@ -19,9 +19,11 @@ export function PageHeader({
       )}
     >
       <div>
-        <h1 className="text-3xl font-bold tracking-tight text-slate-900">{title}</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-[var(--color-foreground)] md:text-3xl">
+          {title}
+        </h1>
         {description && (
-          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-500">
+          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[var(--color-muted-foreground)]">
             {description}
           </p>
         )}

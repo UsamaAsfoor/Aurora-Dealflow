@@ -1,6 +1,7 @@
 import { router } from "./trpc.js";
 import { activityRouter } from "./routers/activity.js";
 import { adminRouter } from "./routers/admin.js";
+import { agentRouter } from "./routers/agent.js";
 import { analysisRouter } from "./routers/analysis.js";
 import { authRouter } from "./routers/auth.js";
 import { billingRouter } from "./routers/billing.js";
@@ -10,6 +11,7 @@ import { commsRouter } from "./routers/comms.js";
 import { dealRouter } from "./routers/deal.js";
 import { exportRouter } from "./routers/export.js";
 import { leadRouter } from "./routers/lead.js";
+import { marketplaceRouter } from "./routers/marketplace.js";
 import { pipelineRouter } from "./routers/pipeline.js";
 import { propertyRouter } from "./routers/property.js";
 import { skipTraceRouter } from "./routers/skipTrace.js";
@@ -21,6 +23,7 @@ export const appRouter = router({
   property: propertyRouter,
   lead: leadRouter,
   analysis: analysisRouter,
+  agent: agentRouter,
   user: userRouter,
   pipeline: pipelineRouter,
   task: taskRouter,
@@ -31,6 +34,7 @@ export const appRouter = router({
   export: exportRouter,
   deal: dealRouter,
   buyer: buyerRouter,
+  marketplace: marketplaceRouter,
   billing: billingRouter,
   admin: adminRouter,
 });

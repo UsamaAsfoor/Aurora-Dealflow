@@ -6,7 +6,13 @@ import { FormEvent, useEffect, useState } from "react";
 import { TRPCClientError } from "@trpc/client";
 import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/lib/auth";
@@ -44,7 +50,10 @@ export function LoginForm() {
               name: name || undefined,
             });
 
-      login(result.token, result.user);
+      login(result.token, {
+        ...result.user,
+        role: result.user.role as "wholesaler" | "buyer" | "admin" | undefined,
+      });
       router.push("/dashboard/search");
     } catch (err) {
       if (err instanceof TRPCClientError) {
@@ -61,12 +70,12 @@ export function LoginForm() {
     <AppShell>
       <div className="relative flex min-h-[calc(100vh-4rem)] items-center justify-center px-4 py-12">
         <div className="pointer-events-none absolute inset-0 overflow-hidden">
-          <div className="absolute left-1/2 top-1/3 h-64 w-64 -translate-x-1/2 rounded-full bg-blue-100/60 blur-3xl" />
+          <div className="absolute left-1/2 top-1/3 h-72 w-72 -translate-x-1/2 rounded-full bg-[var(--color-primary)]/10 blur-3xl" />
         </div>
 
-        <Card className="relative w-full max-w-md shadow-lg shadow-slate-200/50">
+        <Card className="relative w-full max-w-md shadow-2xl shadow-black/30">
           <CardHeader className="text-center">
-            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-blue-600 text-lg font-bold text-white shadow-sm shadow-blue-600/25">
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--color-primary)] text-lg font-bold text-[var(--color-primary-foreground)] shadow-sm">
               A
             </div>
             <CardTitle className="text-xl">
@@ -118,7 +127,7 @@ export function LoginForm() {
               </div>
 
               {error && (
-                <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 ring-1 ring-red-200">
+                <p className="rounded-lg bg-[color-mix(in_srgb,var(--color-destructive)_12%,transparent)] px-3 py-2 text-sm text-[var(--color-destructive)] ring-1 ring-[color-mix(in_srgb,var(--color-destructive)_30%,transparent)]">
                   {error}
                 </p>
               )}
@@ -132,11 +141,11 @@ export function LoginForm() {
               </Button>
             </form>
 
-            <p className="mt-6 text-center text-sm text-slate-500">
+            <p className="mt-6 text-center text-sm text-[var(--color-muted-foreground)]">
               {mode === "login" ? "New here?" : "Already have an account?"}{" "}
               <button
                 type="button"
-                className="font-semibold text-blue-600 transition-colors hover:text-blue-700"
+                className="font-semibold text-[var(--color-primary)] transition-colors hover:brightness-110"
                 onClick={() =>
                   setMode(mode === "login" ? "register" : "login")
                 }
@@ -148,7 +157,7 @@ export function LoginForm() {
             <p className="mt-4 text-center text-sm">
               <Link
                 href="/"
-                className="text-slate-500 transition-colors hover:text-slate-700"
+                className="text-[var(--color-muted-foreground)] transition-colors hover:text-[var(--color-foreground)]"
               >
                 ← Back to home
               </Link>

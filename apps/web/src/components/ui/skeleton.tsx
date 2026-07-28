@@ -7,7 +7,7 @@ export function Skeleton({
   return (
     <div
       className={cn(
-        "animate-pulse rounded-xl bg-gradient-to-r from-slate-100 via-slate-200 to-slate-100",
+        "animate-pulse rounded-lg bg-[var(--color-accent)] ring-1 ring-[var(--color-border)]",
         className,
       )}
       {...props}

@@ -15,8 +15,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className="page-bg min-h-screen font-sans antialiased text-slate-900">
+    <html lang="en" data-theme="studio" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem('aurora_theme');if(t==='studio'||t==='command'||t==='signal')document.documentElement.dataset.theme=t;}catch(e){}})();`,
+          }}
+        />
+      </head>
+      <body className="page-bg min-h-screen font-sans antialiased text-[var(--color-foreground)]">
         <Providers>{children}</Providers>
       </body>
     </html>

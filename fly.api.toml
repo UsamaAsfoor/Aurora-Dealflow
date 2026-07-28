@@ -6,8 +6,12 @@ primary_region = "sjc"
 
 [env]
   PORT = "8080"
-  ATTOM_USE_DEMO = "true"
+  # Live ATTOM — key must be set via: fly secrets set ATTOM_API_KEY=... -a aurora-dealflow-api
+  ATTOM_USE_DEMO = "false"
   OPENAI_USE_DEMO = "true"
+
+[deploy]
+  release_command = "node packages/db/dist/migrate.js"
 
 [http_service]
   internal_port = 8080

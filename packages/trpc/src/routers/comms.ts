@@ -11,12 +11,9 @@ import {
   incrementUsage,
 } from "../services/usage-service.js";
 import { pauseEnrollmentsOnReply } from "../services/campaign-processor.js";
-import {
-  DemoCommsService,
-  type CommsService,
-} from "@aurora/integrations";
+import { createCommsService } from "@aurora/integrations";
 
-const comms = new DemoCommsService() as CommsService;
+const comms = createCommsService();
 
 export const commsRouter = router({
   listMessages: protectedProcedure

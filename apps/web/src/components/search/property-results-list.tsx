@@ -45,27 +45,27 @@ export function PropertyResultCard({
       type="button"
       onClick={() => onSelect?.(property.attomId)}
       className={cn(
-        "ps-result-card w-full text-left transition-all",
+        "w-full text-left transition-colors",
         dense
-          ? "border-b border-slate-100 px-3 py-3 hover:bg-slate-50"
-          : "rounded-xl ring-1 ring-slate-200 hover:ring-blue-300",
+          ? "border-b border-[var(--color-border)] px-3.5 py-3 hover:bg-[var(--color-accent)]/60"
+          : "rounded-xl ring-1 ring-[var(--color-border)] hover:ring-[var(--color-primary)]/40",
         selected &&
           (dense
-            ? "bg-blue-50/80"
-            : "ring-2 ring-blue-500"),
+            ? "bg-[color-mix(in_srgb,var(--color-primary)_12%,transparent)]"
+            : "ring-2 ring-[var(--color-primary)]"),
       )}
     >
-      <div className={cn("flex gap-3", !dense && "p-3")}>
+      <div className={cn("flex gap-3", !dense && "p-3.5")}>
         {property.score != null && (
           <div className="pt-0.5">
             <ScoreBadge score={property.score} size={dense ? "sm" : "md"} />
           </div>
         )}
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-slate-900">
+          <p className="truncate text-sm font-semibold text-[var(--color-foreground)]">
             {formatAddress(property.address)}
           </p>
-          <p className="mt-0.5 text-xs text-slate-500">
+          <p className="mt-0.5 text-xs text-[var(--color-muted-foreground)]">
             {[
               property.beds != null ? `${property.beds} bd` : null,
               property.baths != null ? `${property.baths} ba` : null,
@@ -77,31 +77,31 @@ export function PropertyResultCard({
               .join(" · ")}
           </p>
           <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-            <span className="font-semibold text-slate-800">
+            <span className="font-semibold text-[var(--color-foreground)]">
               {formatCurrency(property.estimatedValue)}
             </span>
-            <span className="text-emerald-700">
+            <span className="text-[var(--color-success)]">
               {formatPercent(property.equityPercent)} equity
             </span>
           </div>
           <div className="mt-1.5 flex flex-wrap gap-1">
             {property.isAbsentee && (
-              <Badge variant="outline" className="text-[10px]">
+              <Badge variant="outline" className="text-[10px] normal-case">
                 Absentee
               </Badge>
             )}
             {property.isVacant && (
-              <Badge variant="warning" className="text-[10px]">
+              <Badge variant="warning" className="text-[10px] normal-case">
                 Vacant
               </Badge>
             )}
             {property.isPreForeclosure && (
-              <Badge variant="destructive" className="text-[10px]">
+              <Badge variant="destructive" className="text-[10px] normal-case">
                 Pre-FC
               </Badge>
             )}
             {property.isTaxDelinquent && (
-              <Badge variant="destructive" className="text-[10px]">
+              <Badge variant="destructive" className="text-[10px] normal-case">
                 Tax
               </Badge>
             )}
@@ -131,7 +131,7 @@ export function PropertyResultsList({
 }) {
   if (isLoading) {
     return (
-      <div className={cn("space-y-2", dense ? "p-2" : "p-4")}>
+      <div className={cn("space-y-2", dense ? "p-3" : "p-4")}>
         {Array.from({ length: 6 }).map((_, i) => (
           <Skeleton key={i} className={cn("w-full", dense ? "h-20" : "h-28")} />
         ))}
@@ -141,13 +141,15 @@ export function PropertyResultsList({
 
   if (results.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center gap-3 p-10 text-center">
-        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-sm font-bold text-blue-600 ring-1 ring-blue-100">
+      <div className="flex flex-col items-center justify-center gap-3 px-6 py-12 text-center">
+        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--color-accent)] text-xs font-semibold text-[var(--color-muted-foreground)] ring-1 ring-[var(--color-border)]">
           0
         </div>
-        <p className="max-w-xs text-sm text-slate-500">{emptyMessage}</p>
+        <p className="max-w-[240px] text-sm leading-relaxed text-[var(--color-muted-foreground)]">
+          {emptyMessage}
+        </p>
         {intentLabel && (
-          <Badge variant="outline" className="capitalize">
+          <Badge variant="outline" className="capitalize normal-case">
             {intentLabel.replace(/_/g, " ")}
           </Badge>
         )}

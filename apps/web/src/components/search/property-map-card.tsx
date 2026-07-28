@@ -15,13 +15,13 @@ interface PropertyMapCardProps {
 
 export function PropertyMapCard({ property, onClose }: PropertyMapCardProps) {
   return (
-    <div className="ps-map-card w-[320px] overflow-hidden rounded-2xl bg-white shadow-2xl shadow-slate-900/20 ring-1 ring-slate-200">
-      <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-4 py-3">
+    <div className="ac-map-card w-[320px] overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--aurora-surface)]/95 shadow-2xl shadow-black/40 backdrop-blur-xl">
+      <div className="flex items-start justify-between gap-3 border-b border-[var(--color-border)] px-4 py-3">
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-slate-900">
+          <p className="truncate text-sm font-semibold text-[var(--color-foreground)]">
             {formatAddress(property.address)}
           </p>
-          <p className="mt-0.5 text-xs text-slate-500">
+          <p className="mt-0.5 text-xs text-[var(--color-muted-foreground)]">
             {[
               property.beds != null ? `${property.beds} bd` : null,
               property.baths != null ? `${property.baths} ba` : null,
@@ -35,7 +35,7 @@ export function PropertyMapCard({ property, onClose }: PropertyMapCardProps) {
         </div>
         <button
           type="button"
-          className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+          className="rounded-lg p-1 text-[var(--color-muted-foreground)] transition hover:bg-[var(--color-accent)] hover:text-[var(--color-foreground)]"
           onClick={onClose}
         >
           <X className="h-4 w-4" />
@@ -45,10 +45,10 @@ export function PropertyMapCard({ property, onClose }: PropertyMapCardProps) {
       <div className="space-y-3 px-4 py-3">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="text-lg font-semibold text-slate-900">
+            <p className="text-lg font-semibold text-[var(--color-foreground)]">
               {formatCurrency(property.estimatedValue)}
             </p>
-            <p className="text-xs text-emerald-700">
+            <p className="text-xs text-[var(--color-success)]">
               {formatPercent(property.equityPercent)} equity
             </p>
           </div>

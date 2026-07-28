@@ -17,6 +17,8 @@ export const users = pgTable("users", {
   name: text("name"),
   passwordHash: text("password_hash"),
   orgId: text("org_id"),
+  /** wholesaler | buyer | admin */
+  role: text("role").default("wholesaler").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
     .notNull(),

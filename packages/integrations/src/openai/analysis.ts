@@ -1,11 +1,26 @@
 import OpenAI from "openai";
 import type {
+  ChatCompletionMessageParam,
+  ChatCompletionTool,
+} from "openai/resources/chat/completions";
+import type {
   AiAnalysisResult,
   DealStrategy,
   OpportunityScoreResult,
   PropertySignals,
 } from "@aurora/core";
 import { strategyLabel } from "@aurora/core";
+
+export type AgentToolCall = {
+  id: string;
+  name: string;
+  arguments: string;
+};
+
+export type AgentChatTurn = {
+  content: string | null;
+  toolCalls: AgentToolCall[];
+};
 
 const VALID_STRATEGIES: DealStrategy[] = [
   "list",
@@ -95,6 +110,91 @@ Respond in JSON: { "summary": "...", "strategy": "...", "reasoning": "..." }`;
     if ((signals.equityPercent ?? 0) > 50) return "flip";
     if (signals.isVacant) return "buyer_match";
     return "cash_offer";
+  }
+
+  isDemoMode() {
+    return this.useDemo;
+  }
+
+  async chatJson(input: {
+    system: string;
+    messages: Array<{ role: "user" | "assistant"; content: string }>;
+  }): Promise<string | null> {
+    if (this.useDemo || !this.client) return null;
+
+    const response = await this.client.chat.completions.create({
+      model: "gpt-4o-mini",
+      temperature: 0.2,
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: input.system },
+        ...input.messages,
+      ],
+    });
+
+    return response.choices[0]?.message?.content ?? null;
+  }
+
+  async chatWithTools(input: {
+    system: string;
+    messages: Array<
+      | { role: "user" | "assistant"; content: string | null }
+      | {
+          role: "assistant";
+          content: string | null;
+          tool_calls: Array<{
+            id: string;
+            type: "function";
+            function: { name: string; arguments: string };
+          }>;
+        }
+      | { role: "tool"; tool_call_id: string; content: string }
+    >;
+    tools: Array<{
+      type: "function";
+      function: {
+        name: string;
+        description: string;
+        parameters: Record<string, unknown>;
+      };
+    }>;
+  }): Promise<AgentChatTurn | null> {
+    if (this.useDemo || !this.client) return null;
+
+    const response = await this.client.chat.completions.create({
+      model: "gpt-4o-mini",
+      temperature: 0.2,
+      tools:
+        input.tools.length > 0
+          ? (input.tools as ChatCompletionTool[])
+          : undefined,
+      tool_choice: input.tools.length > 0 ? "auto" : undefined,
+      messages: [
+        { role: "system", content: input.system },
+        ...(input.messages as ChatCompletionMessageParam[]),
+      ],
+    });
+
+    const message = response.choices[0]?.message;
+    if (!message) return null;
+
+    const toolCalls: AgentToolCall[] = (message.tool_calls ?? []).flatMap(
+      (call) => {
+        if (call.type !== "function") return [];
+        return [
+          {
+            id: call.id,
+            name: call.function.name,
+            arguments: call.function.arguments,
+          },
+        ];
+      },
+    );
+
+    return {
+      content: message.content,
+      toolCalls,
+    };
   }
 
   private generateDemoAnalysis(

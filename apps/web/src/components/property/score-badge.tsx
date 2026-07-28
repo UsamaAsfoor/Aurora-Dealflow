@@ -15,16 +15,16 @@ export function ScoreBadge({
   return (
     <div
       className={cn(
-        "inline-flex shrink-0 items-center justify-center rounded-full font-bold ring-2",
-        size === "sm" && "h-9 w-9 text-xs",
-        size === "md" && "h-11 w-11 text-sm",
-        size === "lg" && "h-16 w-16 text-xl",
+        "inline-flex shrink-0 items-center justify-center rounded-full font-bold ring-1",
+        size === "sm" && "h-8 w-8 text-[11px]",
+        size === "md" && "h-10 w-10 text-sm",
+        size === "lg" && "h-14 w-14 text-lg",
         band === "high" &&
-          "bg-emerald-50 text-emerald-700 ring-emerald-200",
+          "bg-[color-mix(in_srgb,var(--color-success)_18%,transparent)] text-[var(--color-success)] ring-[color-mix(in_srgb,var(--color-success)_35%,transparent)]",
         band === "medium" &&
-          "bg-amber-50 text-amber-700 ring-amber-200",
+          "bg-[color-mix(in_srgb,var(--color-warning)_18%,transparent)] text-[var(--color-warning)] ring-[color-mix(in_srgb,var(--color-warning)_35%,transparent)]",
         band === "low" &&
-          "bg-slate-100 text-slate-500 ring-slate-200",
+          "bg-[var(--color-accent)] text-[var(--color-muted-foreground)] ring-[var(--color-border)]",
         className,
       )}
       title={`Opportunity score: ${score}/100`}
@@ -46,9 +46,9 @@ export function ScoreBandLabel({ score }: { score: number }) {
     <span
       className={cn(
         "text-sm font-semibold",
-        band === "high" && "text-emerald-700",
-        band === "medium" && "text-amber-700",
-        band === "low" && "text-slate-500",
+        band === "high" && "text-[var(--color-success)]",
+        band === "medium" && "text-[var(--color-warning)]",
+        band === "low" && "text-[var(--color-muted-foreground)]",
       )}
     >
       {labels[band]}

@@ -3,24 +3,25 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-semibold transition-all duration-200 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98]",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-semibold transition-all duration-200 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98]",
   {
     variants: {
       variant: {
         default:
-          "bg-blue-600 text-white shadow-sm shadow-blue-600/20 hover:bg-blue-700 hover:shadow-md hover:shadow-blue-600/25",
+          "bg-[var(--color-primary)] text-[var(--color-primary-foreground)] shadow-sm shadow-black/30 hover:brightness-110",
         secondary:
-          "bg-white text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50 hover:ring-slate-300",
+          "bg-[var(--aurora-surface)] text-[var(--color-foreground)] ring-1 ring-[var(--color-border)] hover:bg-[var(--color-accent)]",
         outline:
-          "border border-slate-200 bg-white text-slate-700 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700",
-        ghost: "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+          "border border-[var(--color-border)] bg-transparent text-[var(--color-foreground)] hover:border-[var(--color-primary)]/40 hover:bg-[var(--color-accent)]",
+        ghost:
+          "text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]",
         destructive:
-          "bg-red-50 text-red-700 ring-1 ring-red-200 hover:bg-red-100",
+          "bg-[color-mix(in_srgb,var(--color-destructive)_20%,transparent)] text-[var(--color-destructive)] ring-1 ring-[color-mix(in_srgb,var(--color-destructive)_35%,transparent)] hover:brightness-110",
       },
       size: {
         default: "h-10 px-4 py-2",
-        sm: "h-8 rounded-lg px-3 text-xs",
-        lg: "h-12 rounded-xl px-8 text-base",
+        sm: "h-8 rounded-md px-3 text-xs",
+        lg: "h-12 rounded-md px-8 text-base",
       },
     },
     defaultVariants: {

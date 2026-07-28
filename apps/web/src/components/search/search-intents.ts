@@ -79,8 +79,9 @@ export const DISTRESS_INTENTS: DistressIntentDefinition[] = [
   {
     key: "vacant",
     label: "Vacant",
-    description: "Vacant homes and long-term vacancy signals",
+    description: "Vacancy signals — advanced fields limited by ATTOM package",
     icon: Home,
+    stub: true,
     fields: [
       {
         key: "minVacancyMonths",
@@ -139,8 +140,9 @@ export const DISTRESS_INTENTS: DistressIntentDefinition[] = [
   {
     key: "pre_foreclosure",
     label: "Pre-Foreclosure",
-    description: "Notice of default and auction pipeline",
+    description: "Stub mode — auction/NOD requires upgraded ATTOM package",
     icon: Scale,
+    stub: true,
     fields: [
       {
         key: "foreclosureStage",
@@ -165,8 +167,9 @@ export const DISTRESS_INTENTS: DistressIntentDefinition[] = [
   {
     key: "tax_delinquent",
     label: "Tax Delinquent",
-    description: "Unpaid property tax signals",
+    description: "Stub mode — tax delinquency not in current ATTOM key",
     icon: Building2,
+    stub: true,
     fields: [
       {
         key: "minDelinquentAmount",
@@ -187,8 +190,9 @@ export const DISTRESS_INTENTS: DistressIntentDefinition[] = [
   {
     key: "expired_listings",
     label: "Expired Listings",
-    description: "Listings that failed to sell on MLS",
+    description: "Partial — MLS expiration depth depends on data contract",
     icon: Clock,
+    stub: true,
     fields: [
       {
         key: "minDaysExpired",

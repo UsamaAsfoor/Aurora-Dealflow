@@ -144,8 +144,12 @@ Manual deploy:
 
 ```bash
 fly deploy --config fly.api.toml --app aurora-dealflow-api
+# Mapbox must be passed at build time (Next.js bakes NEXT_PUBLIC_* into the client bundle)
+set -a && source apps/web/.env.local && set +a
 fly deploy --config fly.web.toml --app aurora-dealflow-web \
-  --build-arg NEXT_PUBLIC_API_URL=https://aurora-dealflow-api.fly.dev
+  --build-arg NEXT_PUBLIC_API_URL=https://aurora-dealflow-api.fly.dev \
+  --build-arg "NEXT_PUBLIC_MAPBOX_TOKEN=${NEXT_PUBLIC_MAPBOX_TOKEN}"
 ```
 
 Set secrets on the API app (`JWT_SECRET`, `WEB_ORIGIN`, integration keys) via `fly secrets set`.
+Do **not** put `NEXT_PUBLIC_MAPBOX_TOKEN` only in Fly runtime secrets — it must be a **build arg** on every web deploy.

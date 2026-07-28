@@ -6,9 +6,9 @@ import {
   getUsageSummary,
   getUserPlan,
 } from "../services/usage-service.js";
-import { DemoStripeService } from "@aurora/integrations";
+import { createStripeService } from "@aurora/integrations";
 
-const stripe = new DemoStripeService();
+const stripe = createStripeService();
 
 export const billingRouter = router({
   getSubscription: protectedProcedure.query(async ({ ctx }) => {
@@ -17,7 +17,11 @@ export const billingRouter = router({
       where: eq(subscriptions.userId, ctx.userId),
     });
 
-    return { plan, subscription: sub };
+    return {
+      plan,
+      subscription: sub,
+      liveStripe: Boolean(process.env.STRIPE_SECRET_KEY),
+    };
   }),
 
   getUsage: protectedProcedure.query(async ({ ctx }) => {
@@ -29,7 +33,7 @@ export const billingRouter = router({
   }),
 
   createCheckout: protectedProcedure
-    .input(z.object({ planId: z.enum(["pro", "team"]) }))
+    .input(z.object({ planId: z.enum(["pro", "team", "scale"]) }))
     .mutation(async ({ ctx, input }) => {
       const plan = await ctx.db.query.plans.findFirst({
         where: eq(plans.id, input.planId),
@@ -40,36 +44,40 @@ export const billingRouter = router({
       const checkout = await stripe.createCheckoutSession({
         userId: ctx.userId,
         planId: input.planId,
+        priceId: plan.stripePriceId,
       });
 
-      const periodEnd = new Date();
-      periodEnd.setMonth(periodEnd.getMonth() + 1);
+      // Demo / no-webhook path: activate immediately when not using live Checkout
+      if (checkout.demo || !plan.stripePriceId) {
+        const periodEnd = new Date();
+        periodEnd.setMonth(periodEnd.getMonth() + 1);
 
-      const existing = await ctx.db.query.subscriptions.findFirst({
-        where: eq(subscriptions.userId, ctx.userId),
-      });
+        const existing = await ctx.db.query.subscriptions.findFirst({
+          where: eq(subscriptions.userId, ctx.userId),
+        });
 
-      if (existing) {
-        await ctx.db
-          .update(subscriptions)
-          .set({
+        if (existing) {
+          await ctx.db
+            .update(subscriptions)
+            .set({
+              planId: input.planId,
+              status: "active",
+              stripeCustomerId: checkout.customerId,
+              stripeSubscriptionId: checkout.subscriptionId,
+              currentPeriodEnd: periodEnd,
+              updatedAt: new Date(),
+            })
+            .where(eq(subscriptions.userId, ctx.userId));
+        } else {
+          await ctx.db.insert(subscriptions).values({
+            userId: ctx.userId,
             planId: input.planId,
             status: "active",
             stripeCustomerId: checkout.customerId,
             stripeSubscriptionId: checkout.subscriptionId,
             currentPeriodEnd: periodEnd,
-            updatedAt: new Date(),
-          })
-          .where(eq(subscriptions.userId, ctx.userId));
-      } else {
-        await ctx.db.insert(subscriptions).values({
-          userId: ctx.userId,
-          planId: input.planId,
-          status: "active",
-          stripeCustomerId: checkout.customerId,
-          stripeSubscriptionId: checkout.subscriptionId,
-          currentPeriodEnd: periodEnd,
-        });
+          });
+        }
       }
 
       return checkout;

@@ -252,6 +252,9 @@ export const buyBoxes = pgTable(
     maxPrice: numeric("max_price", { precision: 14, scale: 2 }),
     propertyTypes: jsonb("property_types"),
     strategies: jsonb("strategies"),
+    dealsPerMonth: integer("deals_per_month"),
+    capitalRange: text("capital_range"),
+    smsConsent: boolean("sms_consent").default(false).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -260,6 +263,88 @@ export const buyBoxes = pgTable(
       .notNull(),
   },
   (table) => [index("buy_boxes_buyer_id_idx").on(table.buyerId)],
+);
+
+export const marketplaceListings = pgTable(
+  "marketplace_listings",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    dealRoomId: uuid("deal_room_id")
+      .notNull()
+      .references(() => dealRooms.id, { onDelete: "cascade" }),
+    publisherUserId: text("publisher_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    status: text("status").default("published").notNull(),
+    city: text("city").notNull(),
+    state: text("state").notNull(),
+    beds: integer("beds"),
+    baths: numeric("baths", { precision: 4, scale: 1 }),
+    sqft: integer("sqft"),
+    photoUrl: text("photo_url"),
+    arv: numeric("arv", { precision: 14, scale: 2 }),
+    askingPrice: numeric("asking_price", { precision: 14, scale: 2 }),
+    strategy: text("strategy"),
+    teaserSummary: text("teaser_summary"),
+    fullAddress: text("full_address"),
+    line1: text("line1"),
+    zip: text("zip"),
+    gallery: jsonb("gallery"),
+    publishedAt: timestamp("published_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("marketplace_listings_status_idx").on(table.status),
+    index("marketplace_listings_publisher_idx").on(table.publisherUserId),
+  ],
+);
+
+export const listingUnlocks = pgTable(
+  "listing_unlocks",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    listingId: uuid("listing_id")
+      .notNull()
+      .references(() => marketplaceListings.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("listing_unlocks_listing_idx").on(table.listingId),
+    index("listing_unlocks_user_idx").on(table.userId),
+  ],
+);
+
+export const marketplaceBlasts = pgTable(
+  "marketplace_blasts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    listingId: uuid("listing_id")
+      .notNull()
+      .references(() => marketplaceListings.id, { onDelete: "cascade" }),
+    publisherUserId: text("publisher_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    channel: text("channel").notNull(),
+    recipientCount: integer("recipient_count").default(0).notNull(),
+    body: text("body"),
+    metadata: jsonb("metadata"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [index("marketplace_blasts_listing_idx").on(table.listingId)],
 );
 
 export const dealOffers = pgTable(

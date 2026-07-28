@@ -15,17 +15,22 @@ import {
   Menu,
   X,
   Shield,
+  Store,
 } from "lucide-react";
 import { AuthProvider, useAuth } from "@/lib/auth";
+import { ThemeProvider } from "@/lib/theme";
 import { TrpcProvider } from "@/lib/trpc";
+import { ThemeSwitcher } from "@/components/theme/theme-switcher";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <AuthProvider>
-      <TrpcProvider>{children}</TrpcProvider>
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <TrpcProvider>{children}</TrpcProvider>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }
 
@@ -36,6 +41,7 @@ const navItems = [
   { href: "/dashboard/campaigns", label: "Campaigns", icon: Megaphone },
   { href: "/dashboard/deals", label: "Deals", icon: Briefcase },
   { href: "/dashboard/buyers", label: "Buyers", icon: Contact },
+  { href: "/marketplace", label: "Marketplace", icon: Store },
 ];
 
 const bottomNavItems = [
@@ -64,13 +70,11 @@ function NavLink({
       onClick={onNavigate}
       title={compact ? label : undefined}
       className={cn(
-        "flex items-center rounded-xl text-sm font-medium transition-all",
-        compact
-          ? "justify-center px-0 py-2.5"
-          : "gap-3 px-3 py-2.5",
+        "flex items-center rounded-md text-sm font-medium transition-all",
+        compact ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-2.5",
         active
-          ? "bg-blue-600 text-white shadow-sm shadow-blue-600/20"
-          : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+          ? "bg-[var(--color-accent)] text-[var(--color-primary)] ring-1 ring-[var(--color-primary)]/35"
+          : "text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]",
       )}
     >
       <Icon className="h-4 w-4 shrink-0" />
@@ -90,8 +94,13 @@ function SidebarContent({
   const { user, logout } = useAuth();
 
   return (
-    <div className="flex h-full flex-col">
-      <div className={cn("border-b border-slate-200", compact ? "px-2 py-4" : "px-5 py-5")}>
+    <div className="flex h-full flex-col bg-[var(--color-background)]">
+      <div
+        className={cn(
+          "border-b border-[var(--color-border)]",
+          compact ? "px-2 py-4" : "px-5 py-5",
+        )}
+      >
         <Link
           href="/dashboard/search"
           className={cn(
@@ -101,15 +110,17 @@ function SidebarContent({
           onClick={onNavigate}
           title="Aurora DealFlow"
         >
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-600 text-sm font-bold text-white shadow-sm shadow-blue-600/25">
+          <span className="flex h-9 w-9 items-center justify-center rounded-md bg-[var(--color-primary)] text-sm font-bold text-[var(--color-primary-foreground)]">
             A
           </span>
           {!compact && (
             <div>
-              <p className="text-sm font-bold tracking-tight text-slate-900 group-hover:text-blue-600">
+              <p className="text-sm font-bold tracking-tight text-[var(--color-foreground)] group-hover:text-[var(--color-primary)]">
                 Aurora DealFlow
               </p>
-              <p className="text-xs text-slate-500">Deal intelligence</p>
+              <p className="text-xs text-[var(--color-muted-foreground)]">
+                Acquire · Dispo
+              </p>
             </div>
           )}
         </Link>
@@ -122,7 +133,7 @@ function SidebarContent({
         )}
       >
         {!compact && (
-          <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+          <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
             Workspace
           </p>
         )}
@@ -139,11 +150,11 @@ function SidebarContent({
         ))}
 
         {!compact && (
-          <p className="mb-2 mt-6 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+          <p className="mb-2 mt-6 px-3 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
             Account
           </p>
         )}
-        {compact && <div className="my-2 border-t border-slate-200" />}
+        {compact && <div className="my-2 border-t border-[var(--color-border)]" />}
         {bottomNavItems.map((item) => (
           <NavLink
             key={item.href}
@@ -155,27 +166,40 @@ function SidebarContent({
             onNavigate={onNavigate}
           />
         ))}
+
+        <div className={cn("mt-4", compact ? "px-0.5" : "px-1")}>
+          <ThemeSwitcher compact={compact} />
+        </div>
       </nav>
 
       {user && (
-        <div className={cn("border-t border-slate-200", compact ? "p-2" : "p-4")}>
+        <div
+          className={cn(
+            "border-t border-[var(--color-border)]",
+            compact ? "p-2" : "p-4",
+          )}
+        >
           {!compact && (
-            <div className="mb-3 flex items-center gap-3 rounded-xl bg-slate-50 px-3 py-2.5 ring-1 ring-slate-200/80">
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-700">
+            <div className="mb-3 flex items-center gap-3 rounded-md bg-[var(--color-muted)] px-3 py-2.5 ring-1 ring-[var(--color-border)]">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[var(--color-accent)] text-xs font-bold text-[var(--color-primary)]">
                 {user.email.charAt(0).toUpperCase()}
               </span>
               <div className="min-w-0">
-                <p className="truncate text-sm font-medium text-slate-900">
+                <p className="truncate text-sm font-medium text-[var(--color-foreground)]">
                   {user.name ?? "Account"}
                 </p>
-                <p className="truncate text-xs text-slate-500">{user.email}</p>
+                <p className="truncate text-xs text-[var(--color-muted-foreground)]">
+                  {user.email}
+                </p>
               </div>
             </div>
           )}
           <Button
             variant="ghost"
             size="sm"
-            className={cn(compact ? "w-full justify-center px-0" : "w-full justify-start")}
+            className={cn(
+              compact ? "w-full justify-center px-0" : "w-full justify-start",
+            )}
             onClick={logout}
             title="Sign Out"
           >
@@ -198,22 +222,25 @@ function DashboardSidebarLayout({ children }: { children: React.ReactNode }) {
   }, [pathname]);
 
   return (
-    <div className={cn("flex", isSearch ? "h-screen overflow-hidden" : "min-h-screen")}>
-      {/* Desktop sidebar — icon rail on search for map-first layout */}
+    <div
+      className={cn(
+        "flex",
+        isSearch ? "h-screen overflow-hidden" : "min-h-screen",
+      )}
+    >
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 hidden border-r border-slate-200 bg-white lg:flex",
-          isSearch ? "w-16" : "w-64",
+          "fixed inset-y-0 left-0 z-40 hidden border-r border-[var(--color-border)] bg-[var(--color-background)] lg:flex",
+          isSearch ? "w-14" : "w-60",
         )}
       >
         <SidebarContent compact={isSearch} />
       </aside>
 
-      {/* Mobile sidebar overlay */}
       {mobileOpen && (
         <button
           type="button"
-          className="fixed inset-0 z-40 bg-slate-900/40 lg:hidden"
+          className="fixed inset-0 z-40 bg-black/60 lg:hidden"
           aria-label="Close menu"
           onClick={() => setMobileOpen(false)}
         />
@@ -221,14 +248,14 @@ function DashboardSidebarLayout({ children }: { children: React.ReactNode }) {
 
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 w-64 border-r border-slate-200 bg-white transition-transform duration-200 lg:hidden",
+          "fixed inset-y-0 left-0 z-50 w-60 border-r border-[var(--color-border)] bg-[var(--color-background)] transition-transform duration-200 lg:hidden",
           mobileOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >
         <div className="flex items-center justify-end px-3 pt-3">
           <button
             type="button"
-            className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
+            className="rounded-md p-2 text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)]"
             onClick={() => setMobileOpen(false)}
           >
             <X className="h-5 w-5" />
@@ -237,34 +264,38 @@ function DashboardSidebarLayout({ children }: { children: React.ReactNode }) {
         <SidebarContent onNavigate={() => setMobileOpen(false)} />
       </aside>
 
-      {/* Main content */}
       <div
         className={cn(
           "flex flex-1 flex-col",
           isSearch ? "h-screen min-h-0" : "min-h-screen",
-          isSearch ? "lg:pl-16" : "lg:pl-64",
+          isSearch ? "lg:pl-14" : "lg:pl-60",
         )}
       >
         <header
           className={cn(
-            "sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-slate-200 bg-white/90 px-4 backdrop-blur-xl lg:hidden",
+            "sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-[var(--color-border)] bg-[var(--color-background)]/90 px-4 backdrop-blur-xl lg:hidden",
             isSearch && "absolute inset-x-0 top-0 border-none bg-transparent",
           )}
         >
           <button
             type="button"
-            className="rounded-lg bg-white/95 p-2 text-slate-600 shadow-sm ring-1 ring-slate-200 hover:bg-white"
+            className="rounded-md bg-[var(--aurora-surface)]/95 p-2 text-[var(--color-foreground)] shadow-sm ring-1 ring-[var(--color-border)]"
             onClick={() => setMobileOpen(true)}
           >
             <Menu className="h-5 w-5" />
           </button>
           {!isSearch && (
-            <span className="text-sm font-semibold text-slate-900">
+            <span className="text-sm font-semibold text-[var(--color-foreground)]">
               Aurora DealFlow
             </span>
           )}
         </header>
-        <main className={cn("flex-1", isSearch && "min-h-0 overflow-hidden")}>
+        <main
+          className={cn(
+            "flex-1",
+            isSearch && "flex min-h-0 flex-col overflow-hidden",
+          )}
+        >
           {children}
         </main>
       </div>
@@ -277,17 +308,20 @@ function PublicHeader({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen">
-      <header className="sticky top-0 z-50 border-b border-slate-200/80 bg-white/90 backdrop-blur-xl">
+      <header className="sticky top-0 z-50 border-b border-[var(--color-border)] bg-[var(--color-background)]/90 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 lg:px-6">
           <Link href="/" className="group flex items-center gap-2.5">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 text-sm font-bold text-white shadow-sm shadow-blue-600/25">
+            <span className="flex h-8 w-8 items-center justify-center rounded-md bg-[var(--color-primary)] text-sm font-bold text-[var(--color-primary-foreground)]">
               A
             </span>
-            <span className="text-base font-bold tracking-tight text-slate-900 transition-colors group-hover:text-blue-600">
+            <span className="text-base font-bold tracking-tight text-[var(--color-foreground)] transition-colors group-hover:text-[var(--color-primary)]">
               Aurora DealFlow
             </span>
           </Link>
           <div className="flex items-center gap-3">
+            <Button variant="ghost" size="sm" asChild>
+              <Link href="/marketplace">Marketplace</Link>
+            </Button>
             {!user ? (
               <Button asChild size="sm">
                 <Link href="/login">Sign In</Link>
@@ -337,9 +371,9 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
   if (isLoading || !user || !token) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-3">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600" />
-        <p className="text-sm text-slate-500">Loading your workspace...</p>
+      <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-[var(--color-background)]">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--color-border)] border-t-[var(--color-primary)]" />
+        <p className="text-sm text-[var(--color-muted-foreground)]">Loading your workspace...</p>
       </div>
     );
   }

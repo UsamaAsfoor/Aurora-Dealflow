@@ -104,7 +104,7 @@ export default function BillingPage() {
                     disabled={checkout.isPending}
                     onClick={() =>
                       checkout.mutate({
-                        planId: plan.id as "pro" | "team",
+                        planId: plan.id as "pro" | "team" | "scale",
                       })
                     }
                   >

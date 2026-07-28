@@ -156,6 +156,8 @@ async function main() {
           ai_analyses: 10,
           sms: 50,
           emails: 50,
+          blasts: 5,
+          skip_traces: 10,
         },
       },
       {
@@ -168,6 +170,8 @@ async function main() {
           ai_analyses: 200,
           sms: 1000,
           emails: 1000,
+          blasts: 50,
+          skip_traces: 100,
         },
         stripePriceId: "price_pro_demo",
       },
@@ -181,11 +185,45 @@ async function main() {
           ai_analyses: 1000,
           sms: 5000,
           emails: 5000,
+          blasts: 100,
+          skip_traces: 250,
         },
         stripePriceId: "price_team_demo",
       },
+      {
+        id: "scale",
+        name: "Scale",
+        priceMonthly: 39900,
+        limits: {
+          searches: 5000,
+          leads: 2000,
+          ai_analyses: 500,
+          sms: 2000,
+          emails: 2000,
+          blasts: 200,
+          skip_traces: 500,
+        },
+      },
     ]);
     console.log("Seeded billing plans.");
+  } else {
+    await db
+      .insert(plans)
+      .values({
+        id: "scale",
+        name: "Scale",
+        priceMonthly: 39900,
+        limits: {
+          searches: 5000,
+          leads: 2000,
+          ai_analyses: 500,
+          sms: 2000,
+          emails: 2000,
+          blasts: 200,
+          skip_traces: 500,
+        },
+      })
+      .onConflictDoNothing();
   }
 
   const systemUserId = "system";
@@ -257,7 +295,12 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+main()
+  .then(() => {
+    console.log("Seed complete.");
+    process.exit(0);
+  })
+  .catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });

@@ -25,12 +25,16 @@ export default function DealRoomPage() {
     { dealRoomId: dealQuery.data?.id ?? "" },
     { enabled: !!dealQuery.data?.id },
   );
+  const publish = trpc.marketplace.publishFromDeal.useMutation();
+  const blast = trpc.marketplace.blastMatchedBuyers.useMutation();
 
   const [arv, setArv] = useState("");
   const [repair, setRepair] = useState("");
   const [fee, setFee] = useState("");
+  const [disclaimer, setDisclaimer] = useState(false);
 
   const deal = dealQuery.data;
+  const publishedId = publish.data?.id;
 
   return (
     <AppShell>
@@ -158,28 +162,99 @@ export default function DealRoomPage() {
               </Card>
             </div>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Matched Buyers</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {matchedBuyers.data?.length === 0 ? (
-                  <p className="text-sm text-slate-500">
-                    No matching buyers. Add buyers with buy boxes first.
-                  </p>
-                ) : (
-                  matchedBuyers.data?.map((buyer) => (
-                    <div
-                      key={buyer.id}
-                      className="rounded-lg border border-slate-200 p-3 text-sm"
-                    >
-                      <p className="font-medium">{buyer.name}</p>
-                      <p className="text-slate-500">{buyer.email}</p>
-                    </div>
-                  ))
-                )}
-              </CardContent>
-            </Card>
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Marketplace Dispo</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <label className="flex items-start gap-2 text-xs text-[var(--muted-foreground)]">
+                    <input
+                      type="checkbox"
+                      checked={disclaimer}
+                      onChange={(e) => setDisclaimer(e.target.checked)}
+                    />
+                    I confirm this listing is as-is and I have authority to market
+                    it. Buyers must verify independently (TCPA/consent applies to blasts).
+                  </label>
+                  <Button
+                    className="w-full"
+                    disabled={!disclaimer || publish.isPending || !deal}
+                    onClick={() =>
+                      publish.mutate({
+                        dealRoomId: deal!.id,
+                        disclaimerAccepted: true,
+                        strategy: "wholesale",
+                      })
+                    }
+                  >
+                    {publishedId ? "Published" : "Publish to Marketplace"}
+                  </Button>
+                  {publishedId && (
+                    <>
+                      <Link
+                        href={`/marketplace/${publishedId}`}
+                        className="block text-center text-sm text-[var(--accent)]"
+                      >
+                        View public teaser →
+                      </Link>
+                      <Button
+                        variant="secondary"
+                        className="w-full"
+                        disabled={blast.isPending}
+                        onClick={() =>
+                          blast.mutate({ listingId: publishedId })
+                        }
+                      >
+                        Blast matched buyers (SMS + email)
+                      </Button>
+                      {blast.data && (
+                        <p className="text-xs text-[var(--muted-foreground)]">
+                          Matched {blast.data.matchedCount} · sent{" "}
+                          {blast.data.sentCount}
+                          {blast.data.demoMode ? " (demo provider)" : ""}
+                        </p>
+                      )}
+                      {blast.error && (
+                        <p className="text-xs text-red-400">
+                          {blast.error.message}
+                        </p>
+                      )}
+                    </>
+                  )}
+                  {publish.error && (
+                    <p className="text-xs text-red-400">
+                      {publish.error.message}
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Matched Buyers</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {matchedBuyers.data?.length === 0 ? (
+                    <p className="text-sm text-[var(--muted-foreground)]">
+                      No matching buyers. Add buyers with buy boxes first.
+                    </p>
+                  ) : (
+                    matchedBuyers.data?.map((buyer) => (
+                      <div
+                        key={buyer.id}
+                        className="rounded-lg border border-[var(--border)] p-3 text-sm"
+                      >
+                        <p className="font-medium">{buyer.name}</p>
+                        <p className="text-[var(--muted-foreground)]">
+                          {buyer.email}
+                        </p>
+                      </div>
+                    ))
+                  )}
+                </CardContent>
+              </Card>
+            </div>
           </div>
         )}
       </div>

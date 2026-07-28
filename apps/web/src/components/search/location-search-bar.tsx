@@ -31,7 +31,15 @@ export function LocationSearchBar({
 
   useEffect(() => {
     setQuery(locationQueryFromState(state));
-  }, [state.areaMode, state.zip, state.city, state.county, state.state, state.intent, state.intentFields.address]);
+  }, [
+    state.areaMode,
+    state.zip,
+    state.city,
+    state.county,
+    state.state,
+    state.intent,
+    state.intentFields.address,
+  ]);
 
   useEffect(() => {
     function onDocClick(event: MouseEvent) {
@@ -61,8 +69,8 @@ export function LocationSearchBar({
 
   return (
     <div ref={wrapRef} className={cn("relative min-w-0 flex-1", className)}>
-      <div className="ps-location-bar flex items-center gap-2 rounded-xl bg-white px-3 py-2.5 shadow-lg shadow-slate-900/10 ring-1 ring-slate-200/90">
-        <Search className="h-4 w-4 shrink-0 text-slate-400" />
+      <div className="flex items-center gap-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--aurora-surface)]/95 px-3.5 py-2.5 shadow-lg shadow-black/20 backdrop-blur-md">
+        <Search className="h-4 w-4 shrink-0 text-[var(--color-muted-foreground)]" />
         <input
           value={query}
           onChange={(e) => {
@@ -94,14 +102,14 @@ export function LocationSearchBar({
             }
           }}
           placeholder="County, city, ZIP, or address…"
-          className="min-w-0 flex-1 bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400"
+          className="min-w-0 flex-1 bg-transparent text-sm text-[var(--color-foreground)] outline-none placeholder:text-[var(--aurora-placeholder)]"
           role="combobox"
           aria-expanded={open}
           aria-controls={listId}
           aria-autocomplete="list"
         />
         {formatAreaHint(state) && (
-          <span className="hidden shrink-0 rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600 sm:inline">
+          <span className="hidden shrink-0 rounded-md bg-[color-mix(in_srgb,var(--color-primary)_15%,transparent)] px-2 py-0.5 text-[11px] font-medium text-[var(--color-primary)] sm:inline">
             {formatAreaHint(state)}
           </span>
         )}
@@ -111,25 +119,31 @@ export function LocationSearchBar({
         <ul
           id={listId}
           role="listbox"
-          className="ps-suggest-panel absolute left-0 right-0 top-[calc(100%+6px)] z-50 overflow-hidden rounded-xl bg-white py-1 shadow-xl shadow-slate-900/15 ring-1 ring-slate-200"
+          className="ac-suggest-panel absolute left-0 right-0 top-[calc(100%+6px)] z-50 overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--aurora-surface)] py-1 shadow-2xl shadow-black/40"
         >
           {suggestions.map((suggestion, index) => (
-            <li key={suggestion.id} role="option" aria-selected={index === activeIndex}>
+            <li
+              key={suggestion.id}
+              role="option"
+              aria-selected={index === activeIndex}
+            >
               <button
                 type="button"
                 className={cn(
-                  "flex w-full items-start gap-3 px-3 py-2.5 text-left transition-colors",
-                  index === activeIndex ? "bg-blue-50" : "hover:bg-slate-50",
+                  "flex w-full items-start gap-3 px-3.5 py-2.5 text-left transition-colors",
+                  index === activeIndex
+                    ? "bg-[var(--color-accent)]"
+                    : "hover:bg-[var(--color-accent)]/70",
                 )}
                 onMouseEnter={() => setActiveIndex(index)}
                 onClick={() => commit(suggestion)}
               >
-                <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
+                <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-primary)]" />
                 <span className="min-w-0">
-                  <span className="block truncate text-sm font-medium text-slate-900">
+                  <span className="block truncate text-sm font-medium text-[var(--color-foreground)]">
                     {suggestion.label}
                   </span>
-                  <span className="block text-xs text-slate-500">
+                  <span className="block text-xs text-[var(--color-muted-foreground)]">
                     {suggestion.description}
                   </span>
                 </span>
@@ -145,6 +159,7 @@ export function LocationSearchBar({
 function formatAreaHint(state: SearchWorkspaceState): string | null {
   if (state.areaMode === "zip" && state.zip.length >= 5) return "ZIP";
   if (state.areaMode === "city" && state.city && state.state) return "City";
-  if (state.areaMode === "county" && state.county && state.state) return "County";
+  if (state.areaMode === "county" && state.county && state.state)
+    return "County";
   return null;
 }

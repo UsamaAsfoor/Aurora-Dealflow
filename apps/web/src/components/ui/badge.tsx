@@ -5,24 +5,30 @@ export function Badge({
   variant = "default",
   ...props
 }: React.HTMLAttributes<HTMLSpanElement> & {
-  variant?: "default" | "success" | "warning" | "destructive" | "outline" | "cyan";
+  variant?:
+    | "default"
+    | "success"
+    | "warning"
+    | "destructive"
+    | "outline"
+    | "cyan";
 }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide",
+        "inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
         variant === "default" &&
-          "bg-slate-100 text-slate-700 ring-1 ring-slate-200",
+          "bg-[var(--color-accent)] text-[var(--color-muted-foreground)] ring-1 ring-[var(--color-border)]",
         variant === "cyan" &&
-          "bg-blue-50 text-blue-700 ring-1 ring-blue-200",
+          "bg-[color-mix(in_srgb,var(--color-primary)_15%,transparent)] text-[var(--color-primary)] ring-1 ring-[color-mix(in_srgb,var(--color-primary)_30%,transparent)]",
         variant === "success" &&
-          "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200",
+          "bg-[color-mix(in_srgb,var(--color-success)_15%,transparent)] text-[var(--color-success)] ring-1 ring-[color-mix(in_srgb,var(--color-success)_30%,transparent)]",
         variant === "warning" &&
-          "bg-amber-50 text-amber-700 ring-1 ring-amber-200",
+          "bg-[color-mix(in_srgb,var(--color-warning)_15%,transparent)] text-[var(--color-warning)] ring-1 ring-[color-mix(in_srgb,var(--color-warning)_30%,transparent)]",
         variant === "destructive" &&
-          "bg-red-50 text-red-700 ring-1 ring-red-200",
+          "bg-[color-mix(in_srgb,var(--color-destructive)_15%,transparent)] text-[var(--color-destructive)] ring-1 ring-[color-mix(in_srgb,var(--color-destructive)_30%,transparent)]",
         variant === "outline" &&
-          "border border-slate-200 bg-white text-slate-600",
+          "border border-[var(--color-border)] bg-transparent text-[var(--color-muted-foreground)]",
         className,
       )}
       {...props}

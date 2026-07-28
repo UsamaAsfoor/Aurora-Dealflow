@@ -33,7 +33,7 @@ export function SearchTopBar({
   const chips = getAppliedFilterChips(state);
 
   return (
-    <div className={cn("ps-top-bar space-y-2", className)}>
+    <div className={cn("ac-top-bar space-y-2", className)}>
       <div className="flex flex-wrap items-center gap-2">
         <LocationSearchBar
           state={state}
@@ -43,18 +43,18 @@ export function SearchTopBar({
         <Button
           type="button"
           variant="secondary"
-          className="shrink-0 shadow-lg shadow-slate-900/10"
+          className="h-[42px] shrink-0 rounded-xl"
           onClick={onOpenFilters}
         >
           <Filter className="h-4 w-4" />
           Filters
           {state.intent !== "list_building" && (
-            <span className="ml-1 rounded-md bg-blue-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+            <span className="ml-0.5 rounded-md bg-[var(--color-primary)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--color-primary-foreground)]">
               1+
             </span>
           )}
         </Button>
-        <div className="hidden items-center rounded-xl bg-white/95 px-3 py-2 text-xs font-medium text-slate-600 shadow-lg shadow-slate-900/10 ring-1 ring-slate-200 sm:flex">
+        <div className="hidden h-[42px] items-center rounded-xl border border-[var(--color-border)] bg-[var(--aurora-surface)]/95 px-3.5 text-xs font-medium text-[var(--color-muted-foreground)] shadow-lg shadow-black/20 backdrop-blur-md sm:flex">
           {isLoading
             ? "Updating…"
             : resultCount != null
@@ -64,12 +64,12 @@ export function SearchTopBar({
       </div>
 
       {chips.length > 0 && (
-        <div className="ps-chip-row flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-1.5">
           {chips.map((chip) => (
             <button
               key={chip.id}
               type="button"
-              className="ps-chip inline-flex items-center gap-1.5 rounded-full bg-white/95 px-2.5 py-1 text-xs font-medium text-slate-700 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-50"
+              className="ac-chip inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--aurora-surface)]/95 px-2.5 py-1 text-xs font-medium text-[var(--color-muted-foreground)] shadow-sm transition hover:border-[var(--color-primary)]/30 hover:text-[var(--color-foreground)]"
               onClick={() => {
                 const patch =
                   typeof chip.clear === "function"
@@ -79,7 +79,7 @@ export function SearchTopBar({
               }}
             >
               {chip.label}
-              <X className="h-3 w-3 text-slate-400" />
+              <X className="h-3 w-3 opacity-60" />
             </button>
           ))}
         </div>

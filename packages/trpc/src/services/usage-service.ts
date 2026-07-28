@@ -9,6 +9,8 @@ const DEFAULT_LIMITS = {
   ai_analyses: 10,
   sms: 50,
   emails: 50,
+  blasts: 5,
+  skip_traces: 10,
 };
 
 function periodBounds(date = new Date()) {

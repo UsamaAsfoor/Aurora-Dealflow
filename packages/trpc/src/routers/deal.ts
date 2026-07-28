@@ -230,7 +230,10 @@ export const dealRouter = router({
         with: { property: { with: { valuation: true } } },
       });
 
-      const avm = Number(lead?.property.valuation?.avm ?? 0);
+      const price = Number(room.mao ?? room.arv ?? lead?.property.valuation?.avm ?? 0);
+      const city = lead?.property.city ?? "";
+      const state = lead?.property.state ?? "";
+      const propertyType = lead?.property.propertyType ?? null;
 
       const allBuyers = await ctx.db.query.buyers.findMany({
         where: eq(buyers.userId, ctx.userId),
@@ -241,9 +244,34 @@ export const dealRouter = router({
         .filter((buyer) => {
           const box = buyer.buyBox;
           if (!box) return true;
+
           const min = Number(box.minPrice ?? 0);
           const max = Number(box.maxPrice ?? Number.MAX_SAFE_INTEGER);
-          return avm >= min && avm <= max;
+          if (price > 0 && (price < min || price > max)) return false;
+
+          const areas = (box.areas as string[] | null) ?? [];
+          if (areas.length > 0) {
+            const hay = `${city} ${state}`.toLowerCase();
+            const hit = areas.some(
+              (a) =>
+                hay.includes(a.toLowerCase()) ||
+                a.toLowerCase().includes(city.toLowerCase()),
+            );
+            if (!hit) return false;
+          }
+
+          const types = (box.propertyTypes as string[] | null) ?? [];
+          if (types.length > 0 && propertyType) {
+            if (
+              !types.some(
+                (t) => t.toLowerCase() === propertyType.toLowerCase(),
+              )
+            ) {
+              return false;
+            }
+          }
+
+          return true;
         })
         .map((buyer) => ({
           id: buyer.id,

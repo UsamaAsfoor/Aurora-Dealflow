@@ -299,7 +299,7 @@ export function PropertyMap({
   const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
   if (!token || token.includes("your_mapbox")) {
     return (
-      <div className="flex h-full items-center justify-center bg-slate-100 p-6 text-center text-sm text-slate-500">
+      <div className="flex h-full items-center justify-center bg-[var(--color-accent)] p-6 text-center text-sm text-[var(--color-muted-foreground)]">
         Set NEXT_PUBLIC_MAPBOX_TOKEN to enable the map. Search results still
         appear in the list.
       </div>
@@ -352,7 +352,7 @@ export function SinglePropertyMap({
   const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
   if (!token || token.includes("your_mapbox")) {
     return (
-      <div className="flex h-64 items-center justify-center rounded-xl bg-slate-50 text-sm text-slate-500 ring-1 ring-slate-200">
+      <div className="flex h-64 items-center justify-center rounded-xl bg-[var(--color-muted)] text-sm text-[var(--color-muted-foreground)] ring-1 ring-[var(--color-border)]">
         Map unavailable — configure Mapbox token
       </div>
     );

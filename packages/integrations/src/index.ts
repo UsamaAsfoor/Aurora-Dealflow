@@ -12,5 +12,11 @@ export {
   DemoCommsService,
   type CommsService,
 } from "./comms/demo.js";
+export { createCommsService } from "./comms/create-comms.js";
 export { DemoSkipTraceService } from "./skiptrace/demo.js";
-export { DemoStripeService } from "./stripe/demo.js";
+export {
+  DemoStripeService,
+  type StripeCheckoutResult,
+  type StripeService,
+} from "./stripe/demo.js";
+export { createStripeService } from "./stripe/create-stripe.js";
