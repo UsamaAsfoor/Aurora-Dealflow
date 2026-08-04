@@ -27,12 +27,16 @@ One workspace: **source inventory → work the lead → underwrite → dispo to 
 
 | Secret | Purpose |
 |--------|---------|
-| `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_FROM_NUMBER` | SMS blasts |
+| `CREDENTIALS_ENCRYPTION_KEY` | Encrypt BYO Twilio tokens at rest (else `JWT_SECRET`) |
+| User BYO Twilio (Settings → Integrations) | Preferred: Account SID + Auth Token + From number |
+| `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_FROM_NUMBER` | Optional platform SMS fallback |
 | `RESEND_API_KEY` / `RESEND_FROM_EMAIL` | Email blasts |
 | `STRIPE_SECRET_KEY` + plan `stripe_price_id` | Live checkout |
 | `ATTOM_API_KEY` / `MAPBOX_TOKEN` | Search + map |
 
-Without Twilio/Resend/Stripe keys, providers log **demo** sends and still write blast audit rows.
+Without BYO Twilio or platform Twilio/Resend/Stripe keys, providers log **demo** sends and still write blast audit rows.
+
+Demo tip: Settings → Integrations → save Twilio → Test SMS → lead Communications one-click follow-ups / send to buyers.
 
 ## Deploy
 

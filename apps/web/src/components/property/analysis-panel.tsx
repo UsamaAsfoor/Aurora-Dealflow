@@ -12,6 +12,7 @@ import { ScoreBadge, ScoreBandLabel } from "@/components/property/score-badge";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 
 interface SignalBreakdown {
   label: string;
@@ -35,7 +36,7 @@ export function AnalysisPanel({ analysis, isLoading }: AnalysisPanelProps) {
 
   if (isLoading) {
     return (
-      <Card className="lg:sticky lg:top-24">
+      <Card>
         <CardHeader>
           <CardTitle>AI Analysis</CardTitle>
         </CardHeader>
@@ -50,11 +51,11 @@ export function AnalysisPanel({ analysis, isLoading }: AnalysisPanelProps) {
 
   if (!analysis) {
     return (
-      <Card className="lg:sticky lg:top-24">
+      <Card>
         <CardHeader>
           <CardTitle>AI Analysis</CardTitle>
         </CardHeader>
-        <CardContent className="text-sm text-slate-500">
+        <CardContent className="text-sm text-[var(--color-muted-foreground)]">
           Analysis will appear once property data is loaded.
         </CardContent>
       </Card>
@@ -62,7 +63,7 @@ export function AnalysisPanel({ analysis, isLoading }: AnalysisPanelProps) {
   }
 
   return (
-    <Card className="lg:sticky lg:top-24">
+    <Card>
       <CardHeader>
         <CardTitle>AI Analysis</CardTitle>
       </CardHeader>
@@ -71,20 +72,24 @@ export function AnalysisPanel({ analysis, isLoading }: AnalysisPanelProps) {
           <ScoreBadge score={analysis.score} size="lg" />
           <div>
             <ScoreBandLabel score={analysis.score} />
-            <p className="text-xs text-slate-500">Deterministic rules-based score</p>
+            <p className="text-xs text-[var(--color-muted-foreground)]">
+              Deterministic rules-based score
+            </p>
           </div>
         </div>
 
-        <p className="text-sm leading-relaxed text-slate-600">{analysis.summary}</p>
+        <p className="text-sm leading-relaxed text-[var(--color-muted-foreground)]">
+          {analysis.summary}
+        </p>
 
-        <div className="rounded-xl border border-blue-100 bg-blue-50/80 p-4">
+        <div className="rounded-xl border border-[color-mix(in_srgb,var(--color-primary)_35%,var(--color-border))] bg-[color-mix(in_srgb,var(--color-primary)_12%,transparent)] p-4">
           <div className="flex items-center gap-2">
             <Badge variant="cyan">Strategy</Badge>
-            <span className="font-semibold text-slate-900">
+            <span className="font-semibold text-[var(--color-foreground)]">
               {strategyLabel(analysis.strategy as DealStrategy)}
             </span>
           </div>
-          <p className="mt-2 text-sm leading-relaxed text-slate-600">
+          <p className="mt-2 text-sm leading-relaxed text-[var(--color-muted-foreground)]">
             {analysis.reasoning}
           </p>
         </div>
@@ -92,13 +97,13 @@ export function AnalysisPanel({ analysis, isLoading }: AnalysisPanelProps) {
         <button
           type="button"
           onClick={() => setExpanded(!expanded)}
-          className="flex w-full items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 transition-colors hover:border-slate-300 hover:bg-slate-100"
+          className="flex w-full items-center justify-between rounded-xl border border-[var(--color-border)] bg-[var(--aurora-surface)] px-4 py-3 text-sm font-medium text-[var(--color-foreground)] transition-colors hover:border-[color-mix(in_srgb,var(--color-primary)_40%,var(--color-border))] hover:bg-[var(--color-muted)]"
         >
           Signal Breakdown
           {expanded ? (
-            <ChevronUp className="h-4 w-4 text-slate-400" />
+            <ChevronUp className="h-4 w-4 text-[var(--color-muted-foreground)]" />
           ) : (
-            <ChevronDown className="h-4 w-4 text-slate-400" />
+            <ChevronDown className="h-4 w-4 text-[var(--color-muted-foreground)]" />
           )}
         </button>
 
@@ -107,11 +112,13 @@ export function AnalysisPanel({ analysis, isLoading }: AnalysisPanelProps) {
             {analysis.breakdown.map((signal) => (
               <div
                 key={signal.label}
-                className="flex items-center justify-between rounded-xl border border-slate-100 bg-white px-4 py-3 text-sm"
+                className="flex items-center justify-between rounded-xl border border-[var(--color-border)] bg-[var(--color-muted)]/40 px-4 py-3 text-sm"
               >
                 <div>
-                  <p className="font-medium text-slate-800">{signal.label}</p>
-                  <p className="text-xs text-slate-500">
+                  <p className="font-medium text-[var(--color-foreground)]">
+                    {signal.label}
+                  </p>
+                  <p className="text-xs text-[var(--color-muted-foreground)]">
                     Raw:{" "}
                     {typeof signal.rawValue === "boolean"
                       ? signal.rawValue
@@ -122,7 +129,7 @@ export function AnalysisPanel({ analysis, isLoading }: AnalysisPanelProps) {
                         : "—"}
                   </p>
                 </div>
-                <span className="font-bold text-blue-600">
+                <span className="font-bold text-[color-mix(in_srgb,var(--color-primary)_55%,white)]">
                   +{signal.contribution.toFixed(1)}
                 </span>
               </div>
@@ -153,7 +160,7 @@ export function PropertyStats({
   ].filter(Boolean);
 
   return (
-    <p className="mt-1 text-sm text-slate-500">
+    <p className="mt-1 text-sm text-[var(--color-muted-foreground)]">
       {stats.join(" · ") || "No property details"}
     </p>
   );
@@ -196,16 +203,24 @@ function StatItem({
   highlight?: boolean;
 }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4">
-      <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+    <div
+      className={cn(
+        "rounded-xl border p-4",
+        highlight
+          ? "border-[color-mix(in_srgb,var(--color-success)_35%,var(--color-border))] bg-[color-mix(in_srgb,var(--color-success)_10%,transparent)]"
+          : "border-[var(--color-border)] bg-[var(--color-muted)]/25",
+      )}
+    >
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
         {label}
       </p>
       <p
-        className={
+        className={cn(
+          "mt-1.5 text-lg font-semibold tracking-tight",
           highlight
-            ? "mt-1.5 text-lg font-bold text-emerald-700"
-            : "mt-1.5 text-lg font-semibold text-slate-900"
-        }
+            ? "font-bold text-[var(--color-success)]"
+            : "text-[var(--color-foreground)]",
+        )}
       >
         {value}
       </p>

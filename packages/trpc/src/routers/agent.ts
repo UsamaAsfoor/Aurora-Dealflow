@@ -12,6 +12,10 @@ import {
   takePendingConfirmation,
 } from "../services/agent-pending.js";
 import {
+  agentModeSystemPrompt,
+  askModeSystemPrompt,
+} from "../services/agent-ask.js";
+import {
   type AgentMode,
   type PendingConfirmationPayload,
   type ToolTraceItem,
@@ -76,19 +80,9 @@ const agentResponseSchema = z.object({
 });
 
 function systemPrompt(mode: AgentMode, contextText: string): string {
-  return `You are Aurora's CRM + property search agent in a Cursor-style side panel on the Search map page.
-
-Mode: ${mode === "ask" ? "ASK (read-only tools only)" : "AGENT (reads + safe writes; high-impact actions return as pending confirmations)"}.
-
-Rules:
-- Prefer tools over guessing. Use emit_search_ui or search_properties when the user wants map/filter updates.
-- Keep replies concise markdown. Do not invent lead/deal ids.
-- In Ask mode never mutate CRM.
-- High-impact tools (SMS, email, campaign enroll, publish, blast, checkout) will be held for user confirmation — call them when appropriate; the server gates execution.
-- After tools run, give a short useful summary of what you found or changed.
-
-CRM context pack:
-${contextText}`;
+  return mode === "ask"
+    ? askModeSystemPrompt(contextText)
+    : agentModeSystemPrompt(contextText);
 }
 
 async function runLiveAgentTurn(input: {
@@ -225,37 +219,76 @@ export const agentRouter = router({
         });
       }
 
-      const pack = await buildCrmContextPack(ctx, input.context ?? null);
+      const pack = await buildCrmContextPack(ctx, input.context ?? null).catch(
+        () =>
+          ({
+            user: {
+              name: null,
+              email: ctx.userEmail,
+              role: "wholesaler",
+            },
+            usage: null,
+            pipeline: [],
+            recentLeads: [],
+            openDeals: 0,
+            buyers: 0,
+            activeCampaigns: 0,
+            searchWorkspace: input.context ?? null,
+          }) satisfies Awaited<ReturnType<typeof buildCrmContextPack>>,
+      );
       const packText = formatContextPackForPrompt(pack);
       const caller = createAgentCaller(ctx);
       const mode = input.mode as AgentMode;
 
+      /** Ask mode: never return side effects (map actions or confirmations). */
+      const stripAskSideEffects = <
+        T extends {
+          uiActions?: unknown[];
+          pendingConfirmations?: unknown[];
+        },
+      >(
+        response: T,
+      ): T =>
+        mode === "ask"
+          ? { ...response, uiActions: [], pendingConfirmations: [] }
+          : response;
+
       if (ctx.openai.isDemoMode()) {
-        return runDemoAgentTurn({
-          userId: ctx.userId,
-          mode,
-          userText: lastUser.content,
-          pack,
-          caller,
-        });
+        return stripAskSideEffects(
+          await runDemoAgentTurn({
+            userId: ctx.userId,
+            mode,
+            userText: lastUser.content,
+            pack,
+            caller,
+          }),
+        );
       }
 
       try {
-        return await runLiveAgentTurn({
-          ctx,
-          userId: ctx.userId,
-          mode,
-          messages: input.messages,
-          packText,
-        });
-      } catch {
-        return runDemoAgentTurn({
-          userId: ctx.userId,
-          mode,
-          userText: lastUser.content,
-          pack,
-          caller,
-        });
+        return stripAskSideEffects(
+          await runLiveAgentTurn({
+            ctx,
+            userId: ctx.userId,
+            mode,
+            messages: input.messages,
+            packText,
+          }),
+        );
+      } catch (error) {
+        console.warn(
+          "Live agent turn failed; falling back to demo agent:",
+          error instanceof Error ? error.message : error,
+        );
+        return stripAskSideEffects(
+          await runDemoAgentTurn({
+            userId: ctx.userId,
+            mode,
+            userText: lastUser.content,
+            pack,
+            caller,
+          }),
+        );
       }
     }),
 

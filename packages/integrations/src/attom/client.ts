@@ -3,18 +3,115 @@ import { and, eq, gt } from "drizzle-orm";
 import type { Db } from "@aurora/db";
 import { attomCache } from "@aurora/db";
 import type {
+  CompsQueryOptions,
   NormalizedProperty,
   PropertyComp,
+  PropertySearchPage,
   PropertySearchParams,
   PropertySearchResult,
+  SoldWithinMonths,
 } from "@aurora/core";
-import { demoProperties, demoSearch } from "./demo-data.js";
+import {
+  ATTOM_MAX_PAGE_SIZE,
+  ATTOM_MAX_SEARCH_TOTAL,
+  DEFAULT_SEARCH_LIMIT,
+  MAX_SEARCH_FETCH,
+  formatAttomDate,
+  soldWindowCutoffIso,
+} from "@aurora/core";
+import { computeSearchResultScore } from "@aurora/core/scoring";
+import { demoProperties, demoSearch, filterDemoComps } from "./demo-data.js";
 import { mapPropertyType } from "./map-property-type.js";
 import {
   normalizeAttomProperty,
   normalizeComp,
   normalizeSearchResult,
 } from "./normalize.js";
+
+function haversineMiles(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number,
+): number {
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 3958.8 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function clampRadiusMiles(value?: number): number {
+  if (value == null || !Number.isFinite(value)) return 1;
+  return Math.min(5, Math.max(1, Math.round(value)));
+}
+
+function normalizeSoldMonths(value?: SoldWithinMonths): SoldWithinMonths {
+  if (value === 3 || value === 6 || value === 12) return value;
+  return 6;
+}
+
+function filterCompsLocally(
+  comps: PropertyComp[],
+  options: {
+    subjectAttomId: string;
+    radiusMiles: number;
+    soldWithinMonths: SoldWithinMonths;
+    subjectLat?: number | null;
+    subjectLng?: number | null;
+  },
+): PropertyComp[] {
+  const cutoff = soldWindowCutoffIso(options.soldWithinMonths);
+  const cutoffTime = new Date(cutoff).getTime();
+
+  return comps
+    .filter((comp) => comp.attomId && comp.attomId !== options.subjectAttomId)
+    .map((comp) => {
+      let distanceMiles = comp.distanceMiles;
+      if (
+        distanceMiles == null &&
+        options.subjectLat != null &&
+        options.subjectLng != null &&
+        comp.latitude != null &&
+        comp.longitude != null
+      ) {
+        distanceMiles =
+          Math.round(
+            haversineMiles(
+              options.subjectLat,
+              options.subjectLng,
+              comp.latitude,
+              comp.longitude,
+            ) * 100,
+          ) / 100;
+      }
+      return { ...comp, distanceMiles };
+    })
+    .filter((comp) => {
+      if (
+        comp.distanceMiles != null &&
+        comp.distanceMiles > options.radiusMiles
+      ) {
+        return false;
+      }
+      if (comp.saleDate) {
+        const saleTime = new Date(comp.saleDate).getTime();
+        if (Number.isFinite(saleTime) && saleTime < cutoffTime) return false;
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      const da = a.distanceMiles ?? Number.POSITIVE_INFINITY;
+      const db = b.distanceMiles ?? Number.POSITIVE_INFINITY;
+      if (da !== db) return da - db;
+      const ta = a.saleDate ? new Date(a.saleDate).getTime() : 0;
+      const tb = b.saleDate ? new Date(b.saleDate).getTime() : 0;
+      return tb - ta;
+    })
+    .slice(0, 25);
+}
 
 /**
  * ATTOM Property API v1
@@ -239,18 +336,71 @@ export class AttomClient {
   }
 
   /**
-   * Build ATTOM query params for multi-property search via /property/snapshot.
-   * See: https://api.developer.attomdata.com/docs/guides (Postman / cURL examples)
+   * Derive center + radius from polygon / bounds when lat/lng not provided.
+   * ATTOM v1 list endpoints take radius search, not arbitrary polygons.
+   */
+  private resolveGeo(params: PropertySearchParams): {
+    latitude?: number;
+    longitude?: number;
+    radiusMiles?: number;
+  } {
+    if (
+      params.latitude != null &&
+      params.longitude != null &&
+      params.radiusMiles != null
+    ) {
+      return {
+        latitude: params.latitude,
+        longitude: params.longitude,
+        radiusMiles: params.radiusMiles,
+      };
+    }
+
+    if (params.polygon && params.polygon.length >= 3) {
+      const lats = params.polygon.map((p) => p.lat);
+      const lngs = params.polygon.map((p) => p.lng);
+      const latitude = (Math.min(...lats) + Math.max(...lats)) / 2;
+      const longitude = (Math.min(...lngs) + Math.max(...lngs)) / 2;
+      let radiusMiles = 0.5;
+      for (const point of params.polygon) {
+        radiusMiles = Math.max(
+          radiusMiles,
+          haversineMiles(latitude, longitude, point.lat, point.lng),
+        );
+      }
+      return {
+        latitude,
+        longitude,
+        radiusMiles: Math.min(50, Math.ceil(radiusMiles * 10) / 10),
+      };
+    }
+
+    if (params.bounds) {
+      const { north, south, east, west } = params.bounds;
+      const latitude = (north + south) / 2;
+      const longitude = (east + west) / 2;
+      const radiusMiles = haversineMiles(latitude, longitude, north, east);
+      return {
+        latitude,
+        longitude,
+        radiusMiles: Math.min(50, Math.ceil(radiusMiles * 10) / 10),
+      };
+    }
+
+    return {};
+  }
+
+  /**
+   * Build ATTOM query params for multi-property search.
+   * Docs: https://cloud-help.attomdata.com/article/687-api-search-parameters
+   * pagesize max = 100; universe max = 10,000.
    */
   private buildSearchParams(
     params: PropertySearchParams,
+    page: number,
+    pageSize: number,
+    options?: { includeAvmValueFilters?: boolean },
   ): Record<string, string | number | undefined> {
-    const pageSize = Math.min(params.limit ?? 25, 50);
-    const page =
-      params.offset != null
-        ? Math.floor(params.offset / pageSize) + 1
-        : 1;
-
     const attomParams: Record<string, string | number | undefined> = {
       page,
       pagesize: pageSize,
@@ -261,79 +411,391 @@ export class AttomClient {
       attomParams.address = params.query.trim();
     }
 
-    // Area filters (documented snapshot params)
-    // Do not pair cityname with address1/address2 — ATTOM rejects those combinations.
+    // Area filters — do not pair cityname with address1/address2
     if (params.zip?.trim()) {
+      // ATTOM accepts both casings across package versions
+      attomParams.postalcode = params.zip.trim();
       attomParams.postalCode = params.zip.trim();
     } else if (params.city?.trim()) {
       attomParams.cityname = params.city.trim();
+      if (params.state?.trim()) {
+        attomParams.state = params.state.trim().toUpperCase();
+      }
     } else if (params.county?.trim() && params.state?.trim()) {
-      // County-by-name is not a first-class snapshot filter; use address search as best effort
       const county = params.county.trim().replace(/\s+county$/i, "");
       attomParams.address = `${county} County, ${params.state.trim().toUpperCase()}`;
     }
 
-    // Radius search (requires lat/lng + radius)
+    const geo = this.resolveGeo(params);
     if (
-      params.latitude != null &&
-      params.longitude != null &&
-      params.radiusMiles != null
+      geo.latitude != null &&
+      geo.longitude != null &&
+      geo.radiusMiles != null
     ) {
-      attomParams.latitude = params.latitude;
-      attomParams.longitude = params.longitude;
-      attomParams.radius = params.radiusMiles;
+      attomParams.latitude = geo.latitude;
+      attomParams.longitude = geo.longitude;
+      attomParams.radius = geo.radiusMiles;
     }
 
-    // Distress / owner filters supported by ATTOM
     if (params.filters?.absenteeOnly) {
       attomParams.absenteeowner = "absentee";
     }
 
     if (params.filters?.propertyTypes?.length === 1) {
       const type = params.filters.propertyTypes[0];
-      if (type === "single_family") attomParams.propertyType = "SFR";
-      if (type === "condo") attomParams.propertyType = "CONDOMINIUM";
-      if (type === "multi_family") attomParams.propertyIndicator = "21";
-      if (type === "land") attomParams.propertyIndicator = "80";
+      if (type === "single_family") {
+        attomParams.propertytype = "SFR";
+        attomParams.propertyType = "SFR";
+      }
+      if (type === "condo") {
+        attomParams.propertytype = "CONDOMINIUM";
+        attomParams.propertyType = "CONDOMINIUM";
+      }
+      if (type === "multi_family") attomParams.propertyindicator = "21";
+      if (type === "land") attomParams.propertyindicator = "80";
+      if (type === "townhouse") attomParams.propertytype = "TOWNHOUSE / ROW HOUSE";
     }
 
-    // Price/equity/vacancy filters are applied client-side after search
-    // (minAVMValue is only valid on /attomavm/detail, not /property/snapshot)
+    // Value filters — supported on AVM / assessment packages
+    if (options?.includeAvmValueFilters) {
+      if (params.filters?.minPrice != null) {
+        attomParams.minavmvalue = Math.round(params.filters.minPrice);
+      }
+      if (params.filters?.maxPrice != null) {
+        attomParams.maxavmvalue = Math.round(params.filters.maxPrice);
+      }
+    }
+
+    if (params.sortBy === "price") {
+      attomParams.orderby =
+        params.sortOrder === "asc" ? "avmvalue+asc" : "avmvalue+desc";
+    } else if (
+      geo.latitude != null &&
+      (params.sortBy === "distance" || params.radiusMiles != null)
+    ) {
+      attomParams.orderby =
+        params.sortOrder === "desc" ? "distance+desc" : "distance+asc";
+    }
 
     return attomParams;
   }
 
+  private async fetchSearchPage(
+    endpoint: string,
+    params: PropertySearchParams,
+    page: number,
+    pageSize: number,
+    options?: { includeAvmValueFilters?: boolean },
+  ): Promise<AttomListResponse> {
+    const attomParams = this.buildSearchParams(
+      params,
+      page,
+      pageSize,
+      options,
+    );
+    return this.fetchAttom<AttomListResponse>(endpoint, attomParams);
+  }
+
+  /**
+   * Page through ATTOM until we fill `limit` or exhaust `status.total`.
+   * Page 1 is sequential (needed for total); remaining pages fetch in parallel.
+   */
+  private async fetchPagedProperties(
+    endpoint: string,
+    params: PropertySearchParams,
+    options?: { includeAvmValueFilters?: boolean },
+  ): Promise<{ properties: unknown[]; total: number; pageSize: number }> {
+    const pageSize = ATTOM_MAX_PAGE_SIZE;
+    const offset = Math.max(0, params.offset ?? 0);
+    const limit = Math.min(
+      Math.max(1, params.limit ?? DEFAULT_SEARCH_LIMIT),
+      MAX_SEARCH_FETCH,
+      ATTOM_MAX_SEARCH_TOTAL,
+    );
+    const startPage = Math.floor(offset / pageSize) + 1;
+    const pagesNeeded = Math.ceil((offset % pageSize + limit) / pageSize);
+
+    const first = await this.fetchSearchPage(
+      endpoint,
+      params,
+      startPage,
+      pageSize,
+      options,
+    );
+    const total = Math.min(
+      first.status?.total ?? first.property?.length ?? 0,
+      ATTOM_MAX_SEARCH_TOTAL,
+    );
+    const collected: unknown[] = [...(first.property ?? [])];
+
+    const extraPages: number[] = [];
+    for (let i = 1; i < pagesNeeded; i++) {
+      const page = startPage + i;
+      if ((page - 1) * pageSize >= total) break;
+      extraPages.push(page);
+    }
+
+    if (extraPages.length > 0) {
+      const rest = await Promise.all(
+        extraPages.map((page) =>
+          this.fetchSearchPage(endpoint, params, page, pageSize, options).catch(
+            (error) => {
+              console.warn(
+                `ATTOM ${endpoint} page ${page} failed:`,
+                error instanceof Error ? error.message : error,
+              );
+              return { property: [] } as AttomListResponse;
+            },
+          ),
+        ),
+      );
+      for (const pageData of rest) {
+        collected.push(...(pageData.property ?? []));
+      }
+    }
+
+    const sliceStart = offset % pageSize;
+    const properties = collected.slice(sliceStart, sliceStart + limit);
+    return { properties, total, pageSize };
+  }
+
+  /** Merge richer value/owner fields from another ATTOM package by attomId. */
+  private mergeSearchEnrichment(
+    base: PropertySearchResult[],
+    enrichment: PropertySearchResult[],
+  ): PropertySearchResult[] {
+    if (enrichment.length === 0) return base;
+    const byId = new Map(enrichment.map((r) => [r.attomId, r]));
+    return base.map((row) => {
+      const extra = byId.get(row.attomId);
+      if (!extra) return row;
+      const estimatedValue = row.estimatedValue ?? extra.estimatedValue;
+      const estimatedEquity = row.estimatedEquity ?? extra.estimatedEquity;
+      const equityPercent = row.equityPercent ?? extra.equityPercent;
+      return {
+        ...row,
+        estimatedValue,
+        estimatedEquity,
+        equityPercent,
+        yearBuilt: row.yearBuilt ?? extra.yearBuilt,
+        lotSqft: row.lotSqft ?? extra.lotSqft,
+        ownershipYears: row.ownershipYears ?? extra.ownershipYears,
+        ownerName: row.ownerName ?? extra.ownerName,
+        beds: row.beds ?? extra.beds,
+        baths: row.baths ?? extra.baths,
+        sqft: row.sqft ?? extra.sqft,
+        isAbsentee: row.isAbsentee || extra.isAbsentee,
+        isVacant: row.isVacant || extra.isVacant,
+        isPreForeclosure: row.isPreForeclosure || extra.isPreForeclosure,
+        isTaxDelinquent: row.isTaxDelinquent || extra.isTaxDelinquent,
+        score: computeSearchResultScore({
+          attomId: row.attomId,
+          equityPercent,
+          ownershipYears: row.ownershipYears ?? extra.ownershipYears ?? null,
+          isAbsentee: row.isAbsentee || extra.isAbsentee,
+          isVacant: row.isVacant || extra.isVacant,
+          isPreForeclosure: row.isPreForeclosure || extra.isPreForeclosure,
+          isTaxDelinquent: row.isTaxDelinquent || extra.isTaxDelinquent,
+        }),
+      };
+    });
+  }
+
+  private splitAddressQuery(query: string): {
+    address: string;
+    address1?: string;
+    address2?: string;
+  } {
+    const trimmed = query.trim();
+    const comma = trimmed.indexOf(",");
+    if (comma > 0) {
+      return {
+        address: trimmed,
+        address1: trimmed.slice(0, comma).trim(),
+        address2: trimmed.slice(comma + 1).trim(),
+      };
+    }
+    return { address: trimmed };
+  }
+
+  private async searchByAddress(query: string): Promise<PropertySearchPage> {
+    const split = this.splitAddressQuery(query);
+    const attempts: Array<{
+      endpoint: string;
+      params: Record<string, string | number | undefined>;
+    }> = [
+      {
+        endpoint: "/property/address",
+        params: { address: split.address, page: 1, pagesize: 5 },
+      },
+      {
+        endpoint: "/property/expandedprofile",
+        params: { address: split.address, page: 1, pagesize: 5 },
+      },
+      {
+        endpoint: "/property/detail",
+        params: { address: split.address, page: 1, pagesize: 5 },
+      },
+    ];
+
+    if (split.address1 && split.address2) {
+      attempts.unshift({
+        endpoint: "/property/address",
+        params: {
+          address1: split.address1,
+          address2: split.address2,
+          page: 1,
+          pagesize: 5,
+        },
+      });
+      attempts.push({
+        endpoint: "/property/detail",
+        params: {
+          address1: split.address1,
+          address2: split.address2,
+          page: 1,
+          pagesize: 5,
+        },
+      });
+    }
+
+    for (const attempt of attempts) {
+      try {
+        const data = await this.fetchAttom<AttomListResponse>(
+          attempt.endpoint,
+          attempt.params,
+        );
+        const results = (data.property ?? []).map((item) =>
+          normalizeSearchResult(item),
+        );
+        if (results.length > 0) {
+          const best = results.slice(0, 1);
+          return {
+            results: best,
+            total: data.status?.total ?? best.length,
+            fetched: best.length,
+            pageSize: 5,
+            hasMore: false,
+          };
+        }
+      } catch (error) {
+        console.warn(
+          `ATTOM address lookup ${attempt.endpoint} failed:`,
+          error instanceof Error ? error.message : error,
+        );
+      }
+    }
+
+    return {
+      results: [],
+      total: 0,
+      fetched: 0,
+      pageSize: 5,
+      hasMore: false,
+    };
+  }
+
   async searchProperties(
     params: PropertySearchParams,
-  ): Promise<PropertySearchResult[]> {
+  ): Promise<PropertySearchPage> {
     if (this.useDemoData) {
       return demoSearch(params);
     }
 
-    const attomParams = this.buildSearchParams(params);
-
-    // Prefer snapshot for list-building; fall back to detail for single-address lookups
-    const endpoint = params.query?.trim() && !params.zip && !params.city
-      ? "/property/detail"
-      : "/property/snapshot";
-
-    let data: AttomListResponse;
-    try {
-      data = await this.fetchAttom<AttomListResponse>(endpoint, attomParams);
-    } catch (error) {
-      // Some keys only have snapshot OR detail; try the other once
-      const fallback =
-        endpoint === "/property/snapshot"
-          ? "/property/detail"
-          : "/property/snapshot";
-      console.warn(
-        `ATTOM ${endpoint} failed, retrying ${fallback}:`,
-        error instanceof Error ? error.message : error,
+    const isAddressLookup =
+      params.lookupMode === "address" ||
+      Boolean(
+        params.query?.trim() && !params.zip && !params.city && !params.county,
       );
-      data = await this.fetchAttom<AttomListResponse>(fallback, attomParams);
+
+    if (isAddressLookup && params.query?.trim()) {
+      return this.searchByAddress(params.query.trim());
     }
 
-    return (data.property ?? []).map((item) => normalizeSearchResult(item));
+    const wantsValueFilters =
+      params.filters?.minPrice != null || params.filters?.maxPrice != null;
+
+    // Prefer inventory snapshot; fall back to detail. When price filters are set,
+    // also pull AVM package (supports minavmvalue/maxavmvalue) and merge.
+    const primaryEndpoints = wantsValueFilters
+      ? ["/attomavm/detail", "/property/snapshot", "/assessment/snapshot"]
+      : ["/property/snapshot", "/assessment/snapshot", "/property/detail"];
+
+    let properties: unknown[] = [];
+    let total = 0;
+    let pageSize = ATTOM_MAX_PAGE_SIZE;
+    let usedEndpoint = primaryEndpoints[0]!;
+
+    for (const endpoint of primaryEndpoints) {
+      try {
+        const page = await this.fetchPagedProperties(endpoint, params, {
+          includeAvmValueFilters:
+            endpoint.includes("avm") || endpoint.includes("assessment"),
+        });
+        if (page.properties.length > 0 || page.total > 0) {
+          properties = page.properties;
+          total = page.total;
+          pageSize = page.pageSize;
+          usedEndpoint = endpoint;
+          break;
+        }
+      } catch (error) {
+        console.warn(
+          `ATTOM ${endpoint} search failed:`,
+          error instanceof Error ? error.message : error,
+        );
+      }
+    }
+
+    let results = properties.map((item) => normalizeSearchResult(item));
+
+    // Enrich with AVM / assessment when primary package lacked values
+    const missingValues = results.filter((r) => r.estimatedValue == null).length;
+    if (
+      results.length > 0 &&
+      missingValues > results.length * 0.4 &&
+      !usedEndpoint.includes("avm")
+    ) {
+      try {
+        const enrich = await this.fetchPagedProperties(
+          "/attomavm/detail",
+          { ...params, limit: Math.min(results.length, MAX_SEARCH_FETCH) },
+          { includeAvmValueFilters: wantsValueFilters },
+        );
+        const enrichResults = enrich.properties.map((item) =>
+          normalizeSearchResult(item),
+        );
+        results = this.mergeSearchEnrichment(results, enrichResults);
+        total = Math.max(total, enrich.total);
+      } catch (error) {
+        console.warn(
+          "ATTOM AVM enrichment failed:",
+          error instanceof Error ? error.message : error,
+        );
+      }
+    }
+
+    // Dedupe by attomId (can happen across overlapping pages / packages)
+    const seen = new Set<string>();
+    results = results.filter((row) => {
+      if (!row.attomId || seen.has(row.attomId)) return false;
+      seen.add(row.attomId);
+      return true;
+    });
+
+    const offset = params.offset ?? 0;
+    const limit = Math.min(
+      params.limit ?? DEFAULT_SEARCH_LIMIT,
+      MAX_SEARCH_FETCH,
+    );
+
+    return {
+      results,
+      total,
+      fetched: results.length,
+      pageSize,
+      hasMore: offset + results.length < total && results.length >= limit,
+    };
   }
 
   async getPropertyDetail(attomId: string): Promise<NormalizedProperty> {
@@ -403,17 +865,68 @@ export class AttomClient {
     return { avm: null };
   }
 
-  async getComps(attomId: string): Promise<PropertyComp[]> {
+  async getComps(
+    attomId: string,
+    options: CompsQueryOptions = {},
+  ): Promise<PropertyComp[]> {
+    const radiusMiles = clampRadiusMiles(options.radiusMiles);
+    const soldWithinMonths = normalizeSoldMonths(options.soldWithinMonths);
+    const startSaleTransDate = formatAttomDate(
+      soldWindowCutoffIso(soldWithinMonths),
+    );
+    const endSaleTransDate = formatAttomDate(
+      new Date().toISOString().slice(0, 10),
+    );
+
     if (this.useDemoData) {
-      const property = demoProperties.find((p) => p.attomId === attomId);
-      return property?.comps ?? [];
+      return filterDemoComps(attomId, { radiusMiles, soldWithinMonths });
     }
 
-    const attempts = [
-      { endpoint: "/salescomparables", params: { attomId } },
-      { endpoint: "/salescomparables/detail", params: { attomId } },
-      { endpoint: "/sale/snapshot", params: { attomId, radius: 1 } },
-    ] as const;
+    let subjectLat: number | null = null;
+    let subjectLng: number | null = null;
+    try {
+      const detail = await this.getPropertyDetail(attomId);
+      subjectLat = detail.latitude || null;
+      subjectLng = detail.longitude || null;
+    } catch {
+      // proceed without subject coordinates
+    }
+
+    const attempts: Array<{
+      endpoint: string;
+      params: Record<string, string | number>;
+    }> = [
+      {
+        endpoint: "/salescomparables",
+        params: { attomId, radius: radiusMiles },
+      },
+      {
+        endpoint: "/salescomparables/detail",
+        params: { attomId, radius: radiusMiles },
+      },
+      {
+        endpoint: "/sale/snapshot",
+        params: {
+          attomId,
+          radius: radiusMiles,
+          startSaleTransDate,
+          endSaleTransDate,
+        },
+      },
+    ];
+
+    if (subjectLat != null && subjectLng != null) {
+      attempts.push({
+        endpoint: "/sale/snapshot",
+        params: {
+          latitude: subjectLat,
+          longitude: subjectLng,
+          radius: radiusMiles,
+          startSaleTransDate,
+          endSaleTransDate,
+        },
+      });
+    }
 
     for (const attempt of attempts) {
       try {
@@ -423,13 +936,17 @@ export class AttomClient {
         );
         const properties = data.property ?? [];
         if (properties.length > 0) {
-          return properties
-            .map((item) => normalizeComp(item))
-            .filter((comp) => comp.attomId && comp.attomId !== attomId)
-            .slice(0, 12);
+          const comps = properties.map((item) => normalizeComp(item));
+          return filterCompsLocally(comps, {
+            subjectAttomId: attomId,
+            radiusMiles,
+            soldWithinMonths,
+            subjectLat,
+            subjectLng,
+          });
         }
       } catch {
-        // try next
+        // try next endpoint / param shape
       }
     }
 
@@ -505,14 +1022,51 @@ export class AttomClient {
     }
   }
 
+  /**
+   * ATTOM /property/detailowner — owner identity + mailing address.
+   * Soft-fails when the package isn't entitled or returns no owner.
+   */
+  async getOwnerDetail(attomId: string): Promise<NormalizedProperty | null> {
+    if (this.useDemoData) {
+      return demoProperties.find((p) => p.attomId === attomId) ?? null;
+    }
+
+    const attempts: Array<{
+      endpoint: string;
+      params: Record<string, string | number | undefined>;
+    }> = [
+      { endpoint: "/property/detailowner", params: { attomId } },
+      { endpoint: "/property/detailowner", params: { ID: attomId } },
+    ];
+
+    for (const attempt of attempts) {
+      try {
+        const data = await this.fetchAttom<AttomListResponse>(
+          attempt.endpoint,
+          attempt.params,
+        );
+        const property = data.property?.[0];
+        if (property) {
+          return normalizeAttomProperty(property);
+        }
+      } catch {
+        // try next param shape / soft-fail
+      }
+    }
+
+    return null;
+  }
+
   async getFullProperty(attomId: string): Promise<NormalizedProperty> {
-    const [detail, avmData, comps, preForeclosure, tax] = await Promise.all([
-      this.getPropertyDetail(attomId),
-      this.getAVM(attomId),
-      this.getComps(attomId),
-      this.getPreForeclosure(attomId),
-      this.getTaxAssessor(attomId),
-    ]);
+    const [detail, avmData, comps, preForeclosure, tax, ownerDetail] =
+      await Promise.all([
+        this.getPropertyDetail(attomId),
+        this.getAVM(attomId),
+        this.getComps(attomId),
+        this.getPreForeclosure(attomId),
+        this.getTaxAssessor(attomId),
+        this.getOwnerDetail(attomId),
+      ]);
 
     const avm = avmData.avm ?? detail.valuation.avm;
     const mortgage = detail.valuation.estimatedMortgageBalance;
@@ -521,8 +1075,20 @@ export class AttomClient {
     const equityPercent =
       avm != null && equity != null && avm > 0 ? (equity / avm) * 100 : null;
 
+    // Prefer /property/detailowner for name + mailing when available
+    const owner =
+      (hasUsefulOwner(ownerDetail?.owner) ? ownerDetail!.owner : null) ??
+      (hasUsefulOwner(detail.owner) ? detail.owner : null) ??
+      ownerDetail?.owner ??
+      detail.owner ??
+      null;
+
     return {
       ...detail,
+      owner,
+      ownerType: ownerDetail?.ownerType ?? detail.ownerType ?? null,
+      ownershipYears:
+        ownerDetail?.ownershipYears ?? detail.ownershipYears ?? null,
       valuation: {
         ...detail.valuation,
         avm,
@@ -539,6 +1105,14 @@ export class AttomClient {
         preForeclosure.isPreForeclosure || detail.isPreForeclosure,
     };
   }
+}
+
+function hasUsefulOwner(
+  owner: NormalizedProperty["owner"] | null | undefined,
+): boolean {
+  if (!owner?.name) return false;
+  const name = owner.name.trim().toLowerCase();
+  return name.length > 0 && name !== "unknown owner";
 }
 
 export { mapPropertyType };

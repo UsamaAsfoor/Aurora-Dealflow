@@ -89,8 +89,10 @@ const READ_TOOL_NAMES = [
   "get_usage",
   "get_me",
   "list_campaigns",
-  "emit_search_ui",
 ] as const;
+
+/** Map / search workspace control — Agent mode only (not Ask). */
+const MAP_CONTROL_TOOL_NAMES = ["emit_search_ui"] as const;
 
 const WRITE_TOOL_NAMES = [
   "create_lead",
@@ -155,7 +157,7 @@ function tool(
 }
 
 const ALL_TOOL_DEFS: AgentToolDefinition[] = [
-  tool("emit_search_ui", "Update the map/search UI with a property search.", {
+  tool("emit_search_ui", "Update the map/search UI with a property search (Agent mode only).", {
     properties: {
       zip: { type: "string" },
       city: { type: "string" },
@@ -195,9 +197,13 @@ const ALL_TOOL_DEFS: AgentToolDefinition[] = [
     required: ["attomId"],
     properties: { attomId: { type: "string" } },
   }),
-  tool("get_comps", "Get comps for a property.", {
+  tool("get_comps", "Get comparable sales for a property with optional radius and sold window.", {
     required: ["attomId"],
-    properties: { attomId: { type: "string" } },
+    properties: {
+      attomId: { type: "string" },
+      radiusMiles: { type: "number" },
+      soldWithinMonths: { type: "number", enum: [3, 6, 12] },
+    },
   }),
   tool("list_leads", "List recent leads from the CRM context (prefer list_pipeline for stages).", {
     properties: {},
@@ -352,13 +358,19 @@ const ALL_TOOL_DEFS: AgentToolDefinition[] = [
 export function getToolDefinitions(mode: AgentMode): AgentToolDefinition[] {
   const allowed = new Set<string>([
     ...READ_TOOL_NAMES,
-    ...(mode === "agent" ? WRITE_TOOL_NAMES : []),
+    ...(mode === "agent"
+      ? [...MAP_CONTROL_TOOL_NAMES, ...WRITE_TOOL_NAMES]
+      : []),
   ]);
   return ALL_TOOL_DEFS.filter((t) => allowed.has(t.function.name));
 }
 
 export function isWriteTool(name: string): boolean {
   return (WRITE_TOOL_NAMES as readonly string[]).includes(name);
+}
+
+export function isMapControlTool(name: string): boolean {
+  return (MAP_CONTROL_TOOL_NAMES as readonly string[]).includes(name);
 }
 
 function summarize(name: string, result: unknown, ok: boolean): string {
@@ -447,8 +459,18 @@ export async function executeAgentTool(
   if (mode === "ask" && isWriteTool(name)) {
     return {
       ok: false,
-      result: "Write tools are disabled in Ask mode. Switch to Agent mode.",
-      summary: "Blocked: Ask mode is read-only",
+      result:
+        "Ask mode cannot make changes. Switch to Agent mode to execute this action.",
+      summary: "Blocked in Ask — switch to Agent to execute",
+    };
+  }
+
+  if (mode === "ask" && isMapControlTool(name)) {
+    return {
+      ok: false,
+      result:
+        "Ask mode cannot control the map. Switch to Agent mode to update search/map filters.",
+      summary: "Blocked in Ask — switch to Agent for map control",
     };
   }
 
@@ -525,11 +547,12 @@ export async function executeAgentTool(
           city: rawArgs.city as string | undefined,
           state: rawArgs.state as string | undefined,
           filters: Object.keys(filters).length ? filters : undefined,
-          limit: (rawArgs.limit as number | undefined) ?? 20,
+          limit: (rawArgs.limit as number | undefined) ?? 50,
           sortBy: "score",
         });
+        // Only Agent mode may drive the map/search workspace
         const uiActions: UiAction[] = [];
-        if (rawArgs.zip || rawArgs.city) {
+        if (mode === "agent" && (rawArgs.zip || rawArgs.city)) {
           uiActions.push({
             type: "search",
             zip: rawArgs.zip as string | undefined,
@@ -549,6 +572,7 @@ export async function executeAgentTool(
         }
         const slim = {
           total: result.total ?? result.results?.length,
+          totalAvailable: result.totalAvailable,
           results: (result.results ?? []).slice(0, 8).map((p) => ({
             attomId: p.attomId,
             address: p.address?.line1,
@@ -575,10 +599,19 @@ export async function executeAgentTool(
         return { ok: true, result, summary: summarize(name, result, true) };
       }
       case "get_comps": {
+        const soldWithinMonths = [3, 6, 12].includes(Number(rawArgs.soldWithinMonths))
+          ? (Number(rawArgs.soldWithinMonths) as 3 | 6 | 12)
+          : 6;
         const result = await caller.property.getComps({
           attomId: String(rawArgs.attomId),
+          radiusMiles: Number(rawArgs.radiusMiles) || 1,
+          soldWithinMonths,
         });
-        return { ok: true, result, summary: summarize(name, result, true) };
+        return {
+          ok: true,
+          result,
+          summary: `Loaded ${result.comps.length} comps · avg ${result.averageSalePrice ?? "n/a"} · ARV ${result.estimatedArv ?? "n/a"}`,
+        };
       }
       case "list_leads": {
         const result = await caller.lead.list();

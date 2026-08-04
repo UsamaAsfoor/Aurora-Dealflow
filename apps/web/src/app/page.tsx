@@ -90,7 +90,7 @@ export default function HomePage() {
                 </Link>
               </Button>
               <Button size="lg" variant="outline" asChild>
-                <Link href="/dashboard/search">
+                <Link href="/dashboard">
                   <LayoutDashboard className="h-4 w-4" />
                   Open dashboard
                 </Link>

@@ -3,6 +3,7 @@ import { activityRouter } from "./routers/activity.js";
 import { adminRouter } from "./routers/admin.js";
 import { agentRouter } from "./routers/agent.js";
 import { analysisRouter } from "./routers/analysis.js";
+import { analyticsRouter } from "./routers/analytics.js";
 import { authRouter } from "./routers/auth.js";
 import { billingRouter } from "./routers/billing.js";
 import { buyerRouter } from "./routers/buyer.js";
@@ -10,6 +11,7 @@ import { campaignRouter } from "./routers/campaign.js";
 import { commsRouter } from "./routers/comms.js";
 import { dealRouter } from "./routers/deal.js";
 import { exportRouter } from "./routers/export.js";
+import { integrationsRouter } from "./routers/integrations.js";
 import { leadRouter } from "./routers/lead.js";
 import { marketplaceRouter } from "./routers/marketplace.js";
 import { pipelineRouter } from "./routers/pipeline.js";
@@ -23,6 +25,7 @@ export const appRouter = router({
   property: propertyRouter,
   lead: leadRouter,
   analysis: analysisRouter,
+  analytics: analyticsRouter,
   agent: agentRouter,
   user: userRouter,
   pipeline: pipelineRouter,
@@ -36,6 +39,7 @@ export const appRouter = router({
   buyer: buyerRouter,
   marketplace: marketplaceRouter,
   billing: billingRouter,
+  integrations: integrationsRouter,
   admin: adminRouter,
 });
 

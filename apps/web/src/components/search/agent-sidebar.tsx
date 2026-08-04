@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/lib/auth";
 import { trpc } from "@/lib/trpc";
 import type { SearchWorkspaceState } from "@/components/search/search-intents";
 
@@ -53,8 +54,15 @@ const STORAGE_KEY = "aurora-search-agent-chat-v1";
 const WELCOME: ChatMessage = {
   id: "welcome",
   role: "assistant",
-  content:
-    "Agent ready. Ask me to search markets or inspect your CRM — e.g. **Find vacant homes in 85016** or **Summarize my pipeline**.",
+  content: [
+    "Ready — Cursor-style **Ask** / **Agent** modes.",
+    "",
+    "- **Ask** — research & explain only (no map or CRM changes)",
+    "- **Agent** — execute: update the map, save leads, move pipeline, outreach",
+    "",
+    "Try Ask: _What does my pipeline look like?_ or _Find vacant homes in 85016_",
+    "Switch to Agent when you want me to take action.",
+  ].join("\n"),
 };
 
 function renderMarkdownLite(text: string) {
@@ -105,6 +113,7 @@ export function AgentSidebar({
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const utils = trpc.useUtils();
+  const { token, logout } = useAuth();
 
   useEffect(() => {
     setMessages(loadStoredMessages());
@@ -121,6 +130,8 @@ export function AgentSidebar({
   }, [messages, hydrated]);
 
   function applyUiActions(actions: AgentSearchAction[]) {
+    // Ask mode is read-only — never let the agent move the map/filters
+    if (mode === "ask") return;
     for (const action of actions) {
       if (action.type === "search") onSearchAction(action);
     }
@@ -163,14 +174,22 @@ export function AgentSidebar({
       }
     },
     onError: (err) => {
+      const unauthorized =
+        err.data?.code === "UNAUTHORIZED" ||
+        err.message.includes("UNAUTHORIZED");
       setMessages((prev) => [
         ...prev,
         {
           id: `e-${Date.now()}`,
           role: "assistant",
-          content: `Something went wrong: ${err.message}`,
+          content: unauthorized
+            ? "Your session expired or the API rejected your login token. Sign in again, then retry your question."
+            : `Something went wrong: ${err.message}`,
         },
       ]);
+      if (unauthorized) {
+        queueMicrotask(() => logout());
+      }
     },
   });
 
@@ -224,6 +243,20 @@ export function AgentSidebar({
     const content = draft.trim();
     if (!content || chat.isPending) return;
 
+    if (!token) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `e-${Date.now()}`,
+          role: "assistant",
+          content:
+            "You’re not signed in. Sign in again to use the agent.",
+        },
+      ]);
+      logout();
+      return;
+    }
+
     const forUi: ChatMessage[] =
       messages[0]?.id === "welcome" && messages.length === 1
         ? [{ id: `u-${Date.now()}`, role: "user", content }]
@@ -264,7 +297,10 @@ export function AgentSidebar({
             A
           </span>
           <span className="truncate text-[13px] font-medium text-[var(--cursor-agent-fg)]">
-            Agent
+            {mode === "ask" ? "Ask" : "Agent"}
+          </span>
+          <span className="hidden truncate text-[11px] text-[var(--cursor-agent-muted)] sm:inline">
+            {mode === "ask" ? "· read-only" : "· can edit"}
           </span>
         </div>
         <div className="flex-1" />
@@ -400,8 +436,8 @@ export function AgentSidebar({
             rows={1}
             placeholder={
               mode === "ask"
-                ? "Ask about markets, leads, pipeline…"
-                : "Plan, search, update CRM…"
+                ? "Ask anything — I won’t change the map or CRM…"
+                : "Tell me what to do — search, save leads, update CRM…"
             }
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
@@ -413,10 +449,18 @@ export function AgentSidebar({
             className="max-h-40 min-h-[40px] w-full resize-none bg-transparent text-[13px] leading-relaxed text-[var(--cursor-agent-fg)] outline-none placeholder:text-[var(--cursor-agent-muted)]"
           />
           <div className="mt-1 flex items-center gap-1">
-            <div className="flex rounded-md border border-[var(--cursor-agent-border)] p-0.5">
+            <div
+              className="flex rounded-md border border-[var(--cursor-agent-border)] p-0.5"
+              title={
+                mode === "ask"
+                  ? "Ask: answers only — no map or CRM changes"
+                  : "Agent: can update the map and CRM"
+              }
+            >
               <button
                 type="button"
                 onClick={() => setMode("agent")}
+                title="Agent mode — execute actions"
                 className={cn(
                   "rounded px-2 py-0.5 text-[11px] font-medium transition",
                   mode === "agent"
@@ -429,6 +473,7 @@ export function AgentSidebar({
               <button
                 type="button"
                 onClick={() => setMode("ask")}
+                title="Ask mode — research only"
                 className={cn(
                   "rounded px-2 py-0.5 text-[11px] font-medium transition",
                   mode === "ask"

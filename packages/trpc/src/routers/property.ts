@@ -1,4 +1,10 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
+import {
+  DEFAULT_SEARCH_LIMIT,
+  MAX_SEARCH_FETCH,
+  computeCompsAnalysis,
+} from "@aurora/core";
 import { computeSearchResultScore } from "@aurora/core/scoring";
 import { protectedProcedure, publicProcedure, router } from "../trpc.js";
 
@@ -71,10 +77,11 @@ const searchInputSchema = z.object({
       west: z.number(),
     })
     .optional(),
+  lookupMode: z.enum(["area", "address"]).optional(),
   filters: searchFiltersSchema.optional(),
   sortBy: z.enum(["distance", "price", "equity", "score"]).optional(),
   sortOrder: z.enum(["asc", "desc"]).optional(),
-  limit: z.number().min(1).max(100).optional(),
+  limit: z.number().min(1).max(MAX_SEARCH_FETCH).optional(),
   offset: z.number().min(0).optional(),
 });
 
@@ -196,15 +203,18 @@ function sortResults<
 
 export const propertyRouter = router({
   search: protectedProcedure.input(searchInputSchema).query(async ({ ctx, input }) => {
-    let results = await ctx.attom.searchProperties(input);
-    results = results.map((result) => ({
+    const page = await ctx.attom.searchProperties({
+      ...input,
+      limit: input.limit ?? DEFAULT_SEARCH_LIMIT,
+    });
+    let results = page.results.map((result) => ({
       ...result,
       score:
         result.score ??
         computeSearchResultScore({
           attomId: result.attomId,
           equityPercent: result.equityPercent,
-          ownershipYears: null,
+          ownershipYears: result.ownershipYears ?? null,
           isAbsentee: result.isAbsentee,
           isVacant: result.isVacant,
           isPreForeclosure: result.isPreForeclosure,
@@ -214,7 +224,7 @@ export const propertyRouter = router({
 
     const filters = { ...input.filters };
     if (!ctx.attom.isDemoMode()) {
-      // Live /property/snapshot often lacks these flags — don't wipe the list
+      // Live packages often lack these flags — don't wipe the list
       delete filters.vacantOnly;
       delete filters.minVacancyMonths;
       delete filters.preForeclosureOnly;
@@ -223,14 +233,16 @@ export const propertyRouter = router({
       delete filters.minDelinquentYears;
       delete filters.outOfStateOnly;
       delete filters.minOwnershipYears;
-      // Snapshot rarely includes equity; treating null as 0 would empty the list
+      // Equity rarely present on list packages; null≠0
       delete filters.minEquityPercent;
       delete filters.maxEquityPercent;
-      // Absentee was already requested from ATTOM via absenteeowner=absentee
+      // Price already applied server-side on AVM package when possible
+      if (filters.minPrice != null || filters.maxPrice != null) {
+        // Keep light client filter for non-AVM packages
+      }
       if (filters.absenteeOnly) {
         results = results.map((result) => ({ ...result, isAbsentee: true }));
       }
-      // These modes are demo-only stubs until listing data is wired
       if (
         filters.searchMode === "expired_listings" ||
         filters.searchMode === "emls" ||
@@ -247,9 +259,27 @@ export const propertyRouter = router({
     results = applyClientFilters(results, filters);
     results = sortResults(results, input.sortBy, input.sortOrder);
 
+    const lookupMode =
+      input.lookupMode ??
+      (input.query?.trim() && !input.zip && !input.city && !input.county
+        ? "address"
+        : "area");
+
+    const limit = input.limit ?? DEFAULT_SEARCH_LIMIT;
+    const offset = input.offset ?? 0;
+
     return {
       results,
+      /** Filtered count in this response */
       total: results.length,
+      /** ATTOM universe total for the geo/query (before local filters) */
+      totalAvailable: page.total,
+      fetched: results.length,
+      pageSize: page.pageSize,
+      hasMore: page.hasMore || offset + results.length < page.total,
+      limit,
+      offset,
+      lookupMode,
       isDemoMode: ctx.attom.isDemoMode(),
     };
   }),
@@ -262,15 +292,35 @@ export const propertyRouter = router({
     }),
 
   getComps: protectedProcedure
-    .input(z.object({ attomId: z.string() }))
+    .input(
+      z.object({
+        attomId: z.string(),
+        radiusMiles: z.number().min(1).max(5).default(1),
+        soldWithinMonths: z.union([z.literal(3), z.literal(6), z.literal(12)]).default(6),
+      }),
+    )
     .query(async ({ ctx, input }) => {
-      return ctx.attom.getComps(input.attomId);
+      const [comps, subject] = await Promise.all([
+        ctx.attom.getComps(input.attomId, {
+          radiusMiles: input.radiusMiles,
+          soldWithinMonths: input.soldWithinMonths,
+        }),
+        ctx.attom.getPropertyDetail(input.attomId).catch(() => null),
+      ]);
+
+      return computeCompsAnalysis(comps, {
+        radiusMiles: input.radiusMiles,
+        soldWithinMonths: input.soldWithinMonths,
+        subjectSqft: subject?.sqft ?? null,
+      });
     }),
 
   getByLeadId: protectedProcedure
     .input(z.object({ leadId: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
-      const { propertyFromDb } = await import("../services/property-service.js");
+      const { propertyFromDb, upsertPropertyOwner } = await import(
+        "../services/property-service.js"
+      );
       const lead = await ctx.db.query.leads.findFirst({
         where: (leads, { and, eq }) =>
           and(eq(leads.id, input.leadId), eq(leads.userId, ctx.userId)),
@@ -278,12 +328,48 @@ export const propertyRouter = router({
       });
 
       if (!lead) {
-        throw new Error("Lead not found");
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Lead not found",
+        });
       }
 
-      const property = await propertyFromDb(ctx.db, lead.propertyId);
+      let property = await propertyFromDb(ctx.db, lead.propertyId);
       if (!property) {
-        throw new Error("Property not found");
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Property not found for this lead",
+        });
+      }
+
+      // Backfill owner from ATTOM /property/detailowner when missing
+      const ownerMissing =
+        !property.owner?.name ||
+        property.owner.name.trim().toLowerCase() === "unknown owner";
+      if (ownerMissing && property.attomId && !ctx.attom.isDemoMode()) {
+        try {
+          const ownerDetail = await ctx.attom.getOwnerDetail(property.attomId);
+          if (
+            ownerDetail?.owner?.name &&
+            ownerDetail.owner.name.trim().toLowerCase() !== "unknown owner"
+          ) {
+            await upsertPropertyOwner(
+              ctx.db,
+              lead.propertyId,
+              ownerDetail.owner,
+              ownerDetail.ownershipYears,
+            );
+            property = {
+              ...property,
+              owner: ownerDetail.owner,
+              ownerType: ownerDetail.ownerType ?? property.ownerType,
+              ownershipYears:
+                ownerDetail.ownershipYears ?? property.ownershipYears,
+            };
+          }
+        } catch {
+          // keep DB property without owner
+        }
       }
 
       return {
@@ -293,8 +379,8 @@ export const propertyRouter = router({
           source: lead.source,
           notes: lead.notes,
           createdAt: lead.createdAt,
-          pipelineStageName: lead.pipelineStage.name,
-          pipelineStageColor: lead.pipelineStage.color,
+          pipelineStageName: lead.pipelineStage?.name ?? "Unknown",
+          pipelineStageColor: lead.pipelineStage?.color ?? null,
         },
       };
     }),

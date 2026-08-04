@@ -1,5 +1,9 @@
 import type { CrmContextPack } from "./agent-context.js";
 import {
+  detectSuggestedAgentAction,
+  formatSwitchToAgentSuggestion,
+} from "./agent-ask.js";
+import {
   type AgentCaller,
   type AgentMode,
   type PendingConfirmationPayload,
@@ -157,6 +161,21 @@ export async function runDemoAgentTurn(input: {
   const pendingConfirmations: PendingConfirmationPayload[] = [];
   const parts: string[] = [];
 
+  // Ask mode: if the user wants an action (and isn't also asking a research question
+  // with a ZIP), steer them to Agent — Cursor-style.
+  if (mode === "ask") {
+    const actionAsk = detectSuggestedAgentAction(userText);
+    const searchAsk = parseSearchIntent(userText);
+    if (actionAsk && !searchAsk) {
+      return {
+        message: formatSwitchToAgentSuggestion(actionAsk),
+        toolTrace,
+        uiActions,
+        pendingConfirmations,
+      };
+    }
+  }
+
   const search = parseSearchIntent(userText);
   if (search) {
     const vacant = search.intent === "vacant";
@@ -183,22 +202,99 @@ export async function runDemoAgentTurn(input: {
       ok: exec.ok,
       summary: exec.summary,
     });
-    if (exec.uiActions) uiActions.push(...exec.uiActions);
-    else uiActions.push(search);
+    if (mode === "agent") {
+      if (exec.uiActions) uiActions.push(...exec.uiActions);
+      else uiActions.push(search);
+    }
 
     const results =
-      (exec.result as { results?: Array<{ attomId: string; address?: string }> })
-        ?.results ?? [];
+      (exec.result as {
+        results?: Array<{
+          attomId: string;
+          address?: string;
+          city?: string;
+          estimatedValue?: number | null;
+          score?: number;
+          isVacant?: boolean;
+          isAbsentee?: boolean;
+        }>;
+        total?: number;
+        totalAvailable?: number;
+      })?.results ?? [];
+    const totalAvailable =
+      (exec.result as { totalAvailable?: number; total?: number } | undefined)
+        ?.totalAvailable ??
+      (exec.result as { total?: number } | undefined)?.total ??
+      results.length;
 
-    parts.push(
-      [
-        `Searching **${search.zip}**`,
-        search.intent && search.intent !== "list_building"
-          ? ` with **${search.intent.replace(/_/g, " ")}** mode`
-          : "",
-        `. Found **${results.length}** properties in the top page.`,
-      ].join(""),
-    );
+    const intentLabel =
+      search.intent && search.intent !== "list_building"
+        ? search.intent.replace(/_/g, " ")
+        : null;
+
+    if (mode === "ask") {
+      parts.push(
+        [
+          `## Research: ZIP **${search.zip}**`,
+          intentLabel ? `Filter focus: **${intentLabel}**` : null,
+          "",
+          `I looked up inventory (read-only — **the map was not updated**).`,
+          `Matched about **${totalAvailable.toLocaleString()}** properties; showing the top **${results.length}** by score.`,
+        ]
+          .filter(Boolean)
+          .join("\n"),
+      );
+
+      if (results.length > 0) {
+        const bullets = results.slice(0, 5).map((p, i) => {
+          const flags = [
+            p.isVacant ? "vacant" : null,
+            p.isAbsentee ? "absentee" : null,
+          ]
+            .filter(Boolean)
+            .join(", ");
+          const value =
+            p.estimatedValue != null
+              ? `$${Number(p.estimatedValue).toLocaleString()}`
+              : "value n/a";
+          const score = p.score != null ? `score ${p.score}` : null;
+          return `${i + 1}. **${p.address ?? p.attomId}**${p.city ? `, ${p.city}` : ""} — ${value}${score ? ` · ${score}` : ""}${flags ? ` · ${flags}` : ""}`;
+        });
+        parts.push(["### Top properties", ...bullets].join("\n"));
+      } else {
+        parts.push(
+          "No properties matched that query in the current data set. Try another ZIP or broaden the distress filters.",
+        );
+      }
+
+      const actionAsk = detectSuggestedAgentAction(userText);
+      if (actionAsk || wantsCreateLead(userText)) {
+        parts.push(
+          formatSwitchToAgentSuggestion(
+            actionAsk ?? {
+              action: "save leads or update the map with these results",
+              example: `Find ${intentLabel ?? "homes"} in ${search.zip} and show them on the map`,
+            },
+          ),
+        );
+      } else {
+        parts.push(
+          [
+            "### Next steps",
+            "- Ask me to compare a specific property or explain equity / vacancy signals",
+            "- Switch to **Agent** if you want these results on the map or saved as leads",
+          ].join("\n"),
+        );
+      }
+    } else {
+      parts.push(
+        [
+          `Searched **${search.zip}**`,
+          intentLabel ? ` with **${intentLabel}** mode` : "",
+          `. Found **${results.length}** properties (universe ~${totalAvailable.toLocaleString()}). Map updated.`,
+        ].join(""),
+      );
+    }
 
     if (mode === "agent" && wantsCreateLead(userText) && results[0]?.attomId) {
       const created = await executeAgentTool(
@@ -242,10 +338,6 @@ export async function runDemoAgentTurn(input: {
             : `Could not move lead: ${moved.summary}`,
         );
       }
-    } else if (mode === "ask" && wantsCreateLead(userText)) {
-      parts.push(
-        "Ask mode is read-only — switch to **Agent** to create leads or move pipeline stages.",
-      );
     }
 
     return {
@@ -254,6 +346,18 @@ export async function runDemoAgentTurn(input: {
       uiActions,
       pendingConfirmations,
     };
+  }
+
+  if (mode === "ask") {
+    const actionAsk = detectSuggestedAgentAction(userText);
+    if (actionAsk) {
+      return {
+        message: formatSwitchToAgentSuggestion(actionAsk),
+        toolTrace,
+        uiActions,
+        pendingConfirmations,
+      };
+    }
   }
 
   if (mode === "agent") {
@@ -342,8 +446,18 @@ export async function runDemoAgentTurn(input: {
       ok: true,
       summary: "Loaded CRM context pack",
     });
+    const summary = crmSummaryMessage(pack);
     return {
-      message: crmSummaryMessage(pack),
+      message:
+        mode === "ask"
+          ? [
+              summary,
+              "",
+              "### Tips",
+              "- I can dig into a lead, deal, or buyer next — ask a follow-up question",
+              "- Switch to **Agent** when you want me to move stages, save leads, or update the map",
+            ].join("\n")
+          : summary,
       toolTrace,
       uiActions,
       pendingConfirmations,
@@ -351,23 +465,32 @@ export async function runDemoAgentTurn(input: {
   }
 
   return {
-    message: [
+    message:
       mode === "ask"
-        ? "I'm in **Ask** mode (research only)."
-        : "I'm in **Agent** mode (can update your CRM).",
-      "",
-      "Try:",
-      "- `Find vacant homes in 85016`",
-      "- `Summarize my pipeline`",
-      mode === "agent"
-        ? "- `Find vacant in 85016, add top result as lead, move to Contacted`"
-        : "- Switch to Agent to create leads / move stages",
-      mode === "agent"
-        ? "- `Send SMS` or `Blast matched buyers` (asks for confirmation)"
-        : "",
-    ]
-      .filter(Boolean)
-      .join("\n"),
+        ? [
+            "I'm in **Ask** mode — research and explanations only (like Cursor Ask).",
+            "",
+            "I can:",
+            "- Analyze markets / ZIP inventory (results stay in chat; map unchanged)",
+            "- Explain your pipeline, deals, buyers, and usage",
+            "- Walk through strategy, equity, vacancy, and next steps",
+            "",
+            "I won't:",
+            "- Move the map, save leads, send SMS, or change CRM",
+            "",
+            "Try: `What does my pipeline look like?` or `Find vacant homes in 85016`",
+            "",
+            "Switch to **Agent** when you want me to execute changes.",
+          ].join("\n")
+        : [
+            "I'm in **Agent** mode — I can search, update the map, and change your CRM.",
+            "",
+            "Try:",
+            "- `Find vacant homes in 85016`",
+            "- `Find vacant in 85016, add top result as lead, move to Contacted`",
+            "- `Send SMS` or `Blast matched buyers` (asks for confirmation)",
+            "- `Summarize my pipeline`",
+          ].join("\n"),
     toolTrace,
     uiActions,
     pendingConfirmations,

@@ -12,7 +12,20 @@ export {
   DemoCommsService,
   type CommsService,
 } from "./comms/demo.js";
-export { createCommsService } from "./comms/create-comms.js";
+export {
+  createCommsService,
+  type CreateCommsOptions,
+} from "./comms/create-comms.js";
+export type {
+  SmsCredentials,
+  SmsProvider,
+  SmsProviderId,
+  SmsSendInput,
+  SmsSendResult,
+} from "./sms/types.js";
+export { createSmsProvider } from "./sms/create-sms-provider.js";
+export { TwilioSmsProvider } from "./sms/twilio-provider.js";
+export { DemoSmsProvider } from "./sms/demo-provider.js";
 export { DemoSkipTraceService } from "./skiptrace/demo.js";
 export {
   DemoStripeService,

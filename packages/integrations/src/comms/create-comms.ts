@@ -1,62 +1,40 @@
+import { createSmsProvider } from "../sms/create-sms-provider.js";
+import type { SmsCredentials } from "../sms/types.js";
 import { DemoCommsService, type CommsService } from "./demo.js";
 
+export type CreateCommsOptions = {
+  /** Per-user BYO Twilio (or future SMS provider) credentials */
+  sms?: SmsCredentials | null;
+  email?: { apiKey: string; from: string } | null;
+};
+
 /**
- * Prefer Twilio + Resend when credentials are present; otherwise demo (logged) sends.
+ * Prefer BYO / platform Twilio + Resend when credentials are present;
+ * otherwise demo (logged) sends. SMS is provider-agnostic under createSmsProvider.
  */
-export function createCommsService(): CommsService {
-  const twilioSid = process.env.TWILIO_ACCOUNT_SID;
-  const twilioToken = process.env.TWILIO_AUTH_TOKEN;
-  const twilioFrom = process.env.TWILIO_FROM_NUMBER;
-  const resendKey = process.env.RESEND_API_KEY;
-  const emailFrom = process.env.RESEND_FROM_EMAIL ?? "Aurora <noreply@aurora.dealflow>";
+export function createCommsService(options: CreateCommsOptions = {}): CommsService {
+  const smsProvider = createSmsProvider(options.sms ?? null);
 
-  const hasTwilio = Boolean(twilioSid && twilioToken && twilioFrom);
+  const resendKey =
+    options.email?.apiKey ?? process.env.RESEND_API_KEY;
+  const emailFrom =
+    options.email?.from ??
+    process.env.RESEND_FROM_EMAIL ??
+    "Aurora <noreply@aurora.dealflow>";
   const hasResend = Boolean(resendKey);
-
-  if (!hasTwilio && !hasResend) {
-    return new DemoCommsService();
-  }
 
   return {
     async sendSms(input) {
-      if (!hasTwilio) {
-        return {
-          status: "sent",
-          metadata: { provider: "demo", to: input.to, reason: "twilio_not_configured" },
-        };
-      }
-
-      const auth = Buffer.from(`${twilioSid}:${twilioToken}`).toString("base64");
-      const body = new URLSearchParams({
-        To: input.to,
-        From: twilioFrom!,
-        Body: input.body,
-      });
-
-      const res = await fetch(
-        `https://api.twilio.com/2010-04-01/Accounts/${twilioSid}/Messages.json`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Basic ${auth}`,
-            "Content-Type": "application/x-www-form-urlencoded",
-          },
-          body,
-        },
-      );
-
-      if (!res.ok) {
-        const errText = await res.text();
-        return {
-          status: "failed",
-          metadata: { provider: "twilio", error: errText.slice(0, 500) },
-        };
-      }
-
-      const data = (await res.json()) as { sid?: string };
+      const result = await smsProvider.sendSms(input);
       return {
-        status: "sent",
-        metadata: { provider: "twilio", sid: data.sid, to: input.to },
+        status: result.status,
+        metadata: {
+          provider: result.provider,
+          sid: result.sid,
+          to: result.to ?? input.to,
+          error: result.error,
+          ...result.metadata,
+        },
       };
     },
 

@@ -3,6 +3,7 @@
 import { MapPin, Search } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import {
+  detectSearchInput,
   getLocationSuggestions,
   locationQueryFromState,
   type LocationSuggestion,
@@ -28,6 +29,7 @@ export function LocationSearchBar({
   const wrapRef = useRef<HTMLDivElement>(null);
 
   const suggestions = getLocationSuggestions(query);
+  const detected = detectSearchInput(query);
 
   useEffect(() => {
     setQuery(locationQueryFromState(state));
@@ -101,18 +103,27 @@ export function LocationSearchBar({
               setOpen(false);
             }
           }}
-          placeholder="County, city, ZIP, or address…"
+          placeholder="ZIP code or full street address…"
           className="min-w-0 flex-1 bg-transparent text-sm text-[var(--color-foreground)] outline-none placeholder:text-[var(--aurora-placeholder)]"
           role="combobox"
           aria-expanded={open}
           aria-controls={listId}
           aria-autocomplete="list"
         />
-        {formatAreaHint(state) && (
-          <span className="hidden shrink-0 rounded-md bg-[color-mix(in_srgb,var(--color-primary)_15%,transparent)] px-2 py-0.5 text-[11px] font-medium text-[var(--color-primary)] sm:inline">
-            {formatAreaHint(state)}
-          </span>
-        )}
+        <span
+          className={cn(
+            "hidden shrink-0 rounded-md px-2 py-0.5 text-[11px] font-medium sm:inline",
+            detected.kind === "zip" || detected.kind === "zip_partial"
+              ? "bg-[color-mix(in_srgb,var(--color-primary)_15%,transparent)] text-[var(--color-primary)]"
+              : detected.kind === "address"
+                ? "bg-[color-mix(in_srgb,var(--color-success)_18%,transparent)] text-[var(--color-success)]"
+                : "bg-[var(--color-muted)] text-[var(--color-muted-foreground)]",
+          )}
+        >
+          {query.trim()
+            ? detected.label
+            : formatCommittedHint(state) ?? "ZIP / Address"}
+        </span>
       </div>
 
       {open && suggestions.length > 0 && (
@@ -147,6 +158,9 @@ export function LocationSearchBar({
                     {suggestion.description}
                   </span>
                 </span>
+                <span className="ml-auto shrink-0 rounded-md bg-[var(--color-muted)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">
+                  {suggestion.kind}
+                </span>
               </button>
             </li>
           ))}
@@ -156,8 +170,9 @@ export function LocationSearchBar({
   );
 }
 
-function formatAreaHint(state: SearchWorkspaceState): string | null {
-  if (state.areaMode === "zip" && state.zip.length >= 5) return "ZIP";
+function formatCommittedHint(state: SearchWorkspaceState): string | null {
+  if (state.intentFields.address?.trim()) return "Street address";
+  if (state.areaMode === "zip" && state.zip.length >= 5) return "ZIP code";
   if (state.areaMode === "city" && state.city && state.state) return "City";
   if (state.areaMode === "county" && state.county && state.state)
     return "County";

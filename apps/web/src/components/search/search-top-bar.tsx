@@ -1,10 +1,10 @@
 "use client";
 
-import { Filter, X } from "lucide-react";
+import { Filter, Loader2, X } from "lucide-react";
 import { LocationSearchBar } from "@/components/search/location-search-bar";
 import {
+  formatSearchTarget,
   getAppliedFilterChips,
-  getIntentDefinition,
   type LocationSuggestion,
   type SearchWorkspaceState,
 } from "@/components/search/search-intents";
@@ -31,6 +31,7 @@ export function SearchTopBar({
   className,
 }: SearchTopBarProps) {
   const chips = getAppliedFilterChips(state);
+  const target = formatSearchTarget(state);
 
   return (
     <div className={cn("ac-top-bar space-y-2", className)}>
@@ -48,20 +49,61 @@ export function SearchTopBar({
         >
           <Filter className="h-4 w-4" />
           Filters
-          {state.intent !== "list_building" && (
-            <span className="ml-0.5 rounded-md bg-[var(--color-primary)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--color-primary-foreground)]">
-              1+
-            </span>
-          )}
+          {state.intent !== "list_building" &&
+            state.intent !== "specific_property" && (
+              <span className="ml-0.5 rounded-md bg-[var(--color-primary)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--color-primary-foreground)]">
+                1+
+              </span>
+            )}
         </Button>
-        <div className="hidden h-[42px] items-center rounded-xl border border-[var(--color-border)] bg-[var(--aurora-surface)]/95 px-3.5 text-xs font-medium text-[var(--color-muted-foreground)] shadow-lg shadow-black/20 backdrop-blur-md sm:flex">
-          {isLoading
-            ? "Updating…"
-            : resultCount != null
-              ? `${resultCount.toLocaleString()} properties`
-              : getIntentDefinition(state.intent).label}
+        <div className="hidden h-[42px] min-w-[140px] items-center gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--aurora-surface)]/95 px-3.5 text-xs font-medium text-[var(--color-muted-foreground)] shadow-lg shadow-black/20 backdrop-blur-md sm:flex">
+          {isLoading ? (
+            <>
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--color-primary)]" />
+              {target.kind === "address" ? "Looking up…" : "Searching…"}
+            </>
+          ) : resultCount != null ? (
+            <span>
+              <span className="font-semibold text-[var(--color-foreground)]">
+                {resultCount.toLocaleString()}
+              </span>{" "}
+              {target.kind === "address"
+                ? resultCount === 1
+                  ? "property"
+                  : "matches"
+                : "properties"}
+            </span>
+          ) : (
+            <span className="truncate">{target.label}</span>
+          )}
         </div>
       </div>
+
+      {target.kind !== "none" && (
+        <div className="flex items-center gap-2 rounded-lg border border-[var(--color-border)]/80 bg-[var(--aurora-surface)]/90 px-3 py-1.5 text-xs text-[var(--color-muted-foreground)] shadow-sm backdrop-blur-md">
+          <span
+            className={cn(
+              "rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+              target.kind === "address"
+                ? "bg-[color-mix(in_srgb,var(--color-success)_18%,transparent)] text-[var(--color-success)]"
+                : "bg-[color-mix(in_srgb,var(--color-primary)_15%,transparent)] text-[var(--color-primary)]",
+            )}
+          >
+            {target.label}
+          </span>
+          <span className="min-w-0 truncate font-medium text-[var(--color-foreground)]">
+            {target.detail}
+          </span>
+          {isLoading && (
+            <span className="ml-auto shrink-0 inline-flex items-center gap-1">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              {target.kind === "address"
+                ? "Finding property…"
+                : "Loading inventory…"}
+            </span>
+          )}
+        </div>
+      )}
 
       {chips.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
@@ -78,7 +120,7 @@ export function SearchTopBar({
                 onChange(patch);
               }}
             >
-              {chip.label}
+              <span className="max-w-[240px] truncate">{chip.label}</span>
               <X className="h-3 w-3 opacity-60" />
             </button>
           ))}

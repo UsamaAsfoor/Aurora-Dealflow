@@ -1,9 +1,46 @@
 import type {
+  CompsQueryOptions,
   NormalizedProperty,
+  PropertyComp,
   PropertySearchParams,
   PropertySearchResult,
+  SoldWithinMonths,
 } from "@aurora/core";
+import { soldWindowCutoffIso } from "@aurora/core";
 import { normalizedToSearchResult } from "./normalize.js";
+
+function offsetFromSubject(
+  subjectLat: number,
+  subjectLng: number,
+  distanceMiles: number,
+  bearingDeg: number,
+): { latitude: number; longitude: number } {
+  const earthRadiusMiles = 3958.8;
+  const bearing = (bearingDeg * Math.PI) / 180;
+  const lat1 = (subjectLat * Math.PI) / 180;
+  const lng1 = (subjectLng * Math.PI) / 180;
+  const angular = distanceMiles / earthRadiusMiles;
+  const lat2 = Math.asin(
+    Math.sin(lat1) * Math.cos(angular) +
+      Math.cos(lat1) * Math.sin(angular) * Math.cos(bearing),
+  );
+  const lng2 =
+    lng1 +
+    Math.atan2(
+      Math.sin(bearing) * Math.sin(angular) * Math.cos(lat1),
+      Math.cos(angular) - Math.sin(lat1) * Math.sin(lat2),
+    );
+  return {
+    latitude: (lat2 * 180) / Math.PI,
+    longitude: (lng2 * 180) / Math.PI,
+  };
+}
+
+function monthsAgoIso(months: number): string {
+  const d = new Date();
+  d.setMonth(d.getMonth() - months);
+  return d.toISOString().slice(0, 10);
+}
 
 export const demoProperties: NormalizedProperty[] = [
   {
@@ -61,12 +98,13 @@ export const demoProperties: NormalizedProperty[] = [
           state: "IL",
           zip: "62704",
         },
-        saleDate: "2024-08-10",
+        saleDate: monthsAgoIso(2),
         salePrice: 275000,
         distanceMiles: 0.1,
         beds: 4,
         baths: 2,
         sqft: 2100,
+        lotSqft: 7800,
       },
       {
         attomId: "demo-comp-2",
@@ -76,17 +114,70 @@ export const demoProperties: NormalizedProperty[] = [
           state: "IL",
           zip: "62704",
         },
-        saleDate: "2024-11-22",
+        saleDate: monthsAgoIso(4),
         salePrice: 298000,
         distanceMiles: 0.4,
         beds: 4,
         baths: 2.5,
         sqft: 2350,
+        lotSqft: 8200,
+      },
+      {
+        attomId: "demo-comp-1b",
+        address: {
+          line1: "901 Birch Avenue",
+          city: "Springfield",
+          state: "IL",
+          zip: "62704",
+        },
+        saleDate: monthsAgoIso(5),
+        salePrice: 289000,
+        distanceMiles: 1.2,
+        beds: 3,
+        baths: 2,
+        sqft: 2050,
+        lotSqft: 7500,
+      },
+      {
+        attomId: "demo-comp-1c",
+        address: {
+          line1: "1102 Willow Road",
+          city: "Springfield",
+          state: "IL",
+          zip: "62704",
+        },
+        saleDate: monthsAgoIso(8),
+        salePrice: 268000,
+        distanceMiles: 2.4,
+        beds: 4,
+        baths: 2,
+        sqft: 2180,
+        lotSqft: 9000,
+      },
+      {
+        attomId: "demo-comp-1d",
+        address: {
+          line1: "440 Pine Court",
+          city: "Springfield",
+          state: "IL",
+          zip: "62704",
+        },
+        saleDate: monthsAgoIso(11),
+        salePrice: 312000,
+        distanceMiles: 3.8,
+        beds: 5,
+        baths: 3,
+        sqft: 2600,
+        lotSqft: 11000,
       },
     ],
     isVacant: false,
     isPreForeclosure: false,
     ownershipYears: 19,
+    apn: "14-22-301-015",
+    ownerType: "Individual",
+    purchaseMethod: "Financed",
+    openMortgageCount: 1,
   },
   {
     attomId: "demo-1002",
@@ -186,12 +277,45 @@ export const demoProperties: NormalizedProperty[] = [
           state: "NM",
           zip: "87104",
         },
-        saleDate: "2025-01-05",
+        saleDate: monthsAgoIso(1),
         salePrice: 305000,
         distanceMiles: 0.05,
         beds: 3,
         baths: 2,
         sqft: 1750,
+        lotSqft: 5800,
+      },
+      {
+        attomId: "demo-comp-3b",
+        address: {
+          line1: "401 Corrales Drive",
+          city: "Albuquerque",
+          state: "NM",
+          zip: "87104",
+        },
+        saleDate: monthsAgoIso(4),
+        salePrice: 318000,
+        distanceMiles: 0.9,
+        beds: 3,
+        baths: 2,
+        sqft: 1900,
+        lotSqft: 6200,
+      },
+      {
+        attomId: "demo-comp-3c",
+        address: {
+          line1: "88 Rio Grande Blvd",
+          city: "Albuquerque",
+          state: "NM",
+          zip: "87104",
+        },
+        saleDate: monthsAgoIso(9),
+        salePrice: 295000,
+        distanceMiles: 2.1,
+        beds: 3,
+        baths: 1.5,
+        sqft: 1680,
+        lotSqft: 5400,
       },
     ],
     isVacant: true,
@@ -303,12 +427,29 @@ export const demoProperties: NormalizedProperty[] = [
           state: "NY",
           zip: "10001",
         },
-        saleDate: "2024-03-18",
+        saleDate: monthsAgoIso(3),
         salePrice: 1180000,
         distanceMiles: 0.08,
         beds: 3,
         baths: 2,
         sqft: 2300,
+        lotSqft: 2800,
+      },
+      {
+        attomId: "demo-comp-5b",
+        address: {
+          line1: "225 Baker Street",
+          city: "London",
+          state: "NY",
+          zip: "10001",
+        },
+        saleDate: monthsAgoIso(7),
+        salePrice: 1225000,
+        distanceMiles: 0.15,
+        beds: 3,
+        baths: 2.5,
+        sqft: 2450,
+        lotSqft: 3100,
       },
     ],
     isVacant: true,
@@ -454,6 +595,49 @@ export const demoProperties: NormalizedProperty[] = [
   },
 ];
 
+export function filterDemoComps(
+  attomId: string,
+  options: CompsQueryOptions = {},
+): PropertyComp[] {
+  const property = demoProperties.find((p) => p.attomId === attomId);
+  if (!property) return [];
+
+  const radiusMiles = Math.min(5, Math.max(1, options.radiusMiles ?? 1));
+  const soldWithinMonths = (
+    options.soldWithinMonths === 3 ||
+    options.soldWithinMonths === 6 ||
+    options.soldWithinMonths === 12
+      ? options.soldWithinMonths
+      : 6
+  ) as SoldWithinMonths;
+  const cutoff = new Date(soldWindowCutoffIso(soldWithinMonths)).getTime();
+
+  return property.comps
+    .map((comp, index) => {
+      const coords = offsetFromSubject(
+        property.latitude,
+        property.longitude,
+        comp.distanceMiles ?? 0.2 + index * 0.3,
+        35 + index * 55,
+      );
+      return {
+        ...comp,
+        latitude: comp.latitude ?? coords.latitude,
+        longitude: comp.longitude ?? coords.longitude,
+        lotSqft: comp.lotSqft ?? property.lotSqft,
+      };
+    })
+    .filter((comp) => (comp.distanceMiles ?? 0) <= radiusMiles)
+    .filter((comp) => {
+      if (!comp.saleDate) return true;
+      const saleTime = new Date(comp.saleDate).getTime();
+      return !Number.isFinite(saleTime) || saleTime >= cutoff;
+    })
+    .sort(
+      (a, b) => (a.distanceMiles ?? 0) - (b.distanceMiles ?? 0),
+    );
+}
+
 function applyFilters(
   results: PropertySearchResult[],
   params: PropertySearchParams,
@@ -462,13 +646,34 @@ function applyFilters(
   const filters = params.filters;
 
   if (params.query) {
-    const q = params.query.toLowerCase();
-    filtered = filtered.filter(
-      (r) =>
-        r.address.line1.toLowerCase().includes(q) ||
-        r.address.city.toLowerCase().includes(q) ||
-        r.address.zip.includes(q),
-    );
+    const q = params.query.toLowerCase().trim();
+    const isAddressLookup =
+      params.lookupMode === "address" ||
+      (!params.zip && !params.city && !params.county);
+
+    if (isAddressLookup) {
+      const scored = filtered
+        .map((r) => {
+          const line1 = r.address.line1.toLowerCase();
+          const full = `${line1}, ${r.address.city.toLowerCase()}, ${r.address.state.toLowerCase()} ${r.address.zip}`.trim();
+          let score = 0;
+          if (full === q || line1 === q) score = 100;
+          else if (full.startsWith(q) || line1.startsWith(q)) score = 80;
+          else if (full.includes(q) || line1.includes(q)) score = 50;
+          else if (q.includes(line1) && line1.length >= 5) score = 40;
+          return { r, score };
+        })
+        .filter((item) => item.score > 0)
+        .sort((a, b) => b.score - a.score);
+      filtered = scored.slice(0, 1).map((item) => item.r);
+    } else {
+      filtered = filtered.filter(
+        (r) =>
+          r.address.line1.toLowerCase().includes(q) ||
+          r.address.city.toLowerCase().includes(q) ||
+          r.address.zip.includes(q),
+      );
+    }
   }
 
   if (params.city) {
@@ -586,11 +791,22 @@ function applyFilters(
   }
 
   const offset = params.offset ?? 0;
-  const limit = params.limit ?? 25;
+  const limit = params.limit ?? 250;
   return filtered.slice(offset, offset + limit);
 }
 
-export function demoSearch(params: PropertySearchParams): PropertySearchResult[] {
-  const results = demoProperties.map(normalizedToSearchResult);
-  return applyFilters(results, params);
+export function demoSearch(params: PropertySearchParams): import("@aurora/core").PropertySearchPage {
+  const mapped = demoProperties.map(normalizedToSearchResult);
+  // Apply filters without slicing to know the true filtered total
+  const unpaged = applyFilters(mapped, { ...params, limit: 10_000, offset: 0 });
+  const offset = params.offset ?? 0;
+  const limit = params.limit ?? 250;
+  const results = unpaged.slice(offset, offset + limit);
+  return {
+    results,
+    total: unpaged.length,
+    fetched: results.length,
+    pageSize: 100,
+    hasMore: offset + results.length < unpaged.length,
+  };
 }

@@ -26,7 +26,7 @@ export async function buildCrmContextPack(
   const caller = createAgentCaller(ctx);
 
   const [me, usage, board, deals, buyers, campaigns] = await Promise.all([
-    caller.user.me(),
+    caller.user.me().catch(() => null),
     caller.billing.getUsage().catch(() => null),
     caller.pipeline.listBoard().catch(() => []),
     caller.deal.list().catch(() => []),

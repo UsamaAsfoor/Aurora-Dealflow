@@ -401,3 +401,39 @@ select {
   background: #3c3c3c;
   border-radius: 3px;
 }
+
+/* —— Comparable sales map pins —— */
+.comps-map-pin {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 2px solid #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.comps-map-pin-subject {
+  width: 28px;
+  height: 28px;
+  background: var(--color-foreground);
+  color: var(--color-background);
+}
+
+.comps-map-pin-comp {
+  min-width: 44px;
+  height: 26px;
+  padding: 0 8px;
+  background: var(--color-primary);
+  color: var(--color-primary-foreground);
+}
+
+.comps-map-pin-selected {
+  outline: 2px solid var(--color-foreground);
+  outline-offset: 2px;
+  transform: scale(1.06);
+}

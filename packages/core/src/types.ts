@@ -60,6 +60,25 @@ export interface PropertyComp {
   beds: number | null;
   baths: number | null;
   sqft: number | null;
+  lotSqft?: number | null;
+  latitude?: number | null;
+  longitude?: number | null;
+}
+
+export type SoldWithinMonths = 3 | 6 | 12;
+
+export interface CompsQueryOptions {
+  radiusMiles?: number;
+  soldWithinMonths?: SoldWithinMonths;
+}
+
+export interface CompsAnalysis {
+  comps: PropertyComp[];
+  averageSalePrice: number | null;
+  averagePricePerSqft: number | null;
+  estimatedArv: number | null;
+  radiusMiles: number;
+  soldWithinMonths: SoldWithinMonths;
 }
 
 export interface PropertySignals {
@@ -92,6 +111,10 @@ export interface NormalizedProperty {
   isVacant: boolean;
   isPreForeclosure: boolean;
   ownershipYears: number | null;
+  apn?: string | null;
+  ownerType?: string | null;
+  purchaseMethod?: string | null;
+  openMortgageCount?: number | null;
   mlsNumber?: string | null;
   listingStatus?: string | null;
   emlsStatus?: string | null;
@@ -137,6 +160,8 @@ export interface PropertySearchFilters {
   minDelinquentYears?: number;
 }
 
+export type PropertyLookupMode = "area" | "address";
+
 export interface PropertySearchParams {
   query?: string;
   city?: string;
@@ -153,11 +178,32 @@ export interface PropertySearchParams {
     east: number;
     west: number;
   };
+  /** area = multi-property ZIP/city/county; address = single-property lookup */
+  lookupMode?: PropertyLookupMode;
   filters?: PropertySearchFilters;
   sortBy?: "distance" | "price" | "equity" | "score";
   sortOrder?: "asc" | "desc";
+  /** How many results to return (ATTOM pagesize max 100; we page to fill this). */
   limit?: number;
   offset?: number;
+}
+
+/** ATTOM max pagesize is 100; max properties per search universe is 10_000. */
+export const ATTOM_MAX_PAGE_SIZE = 100;
+export const ATTOM_MAX_SEARCH_TOTAL = 10_000;
+/** Default inventory pull per search (multiple ATTOM pages). */
+export const DEFAULT_SEARCH_LIMIT = 250;
+/** Hard cap per request to control ATTOM cost. */
+export const MAX_SEARCH_FETCH = 1000;
+
+export interface PropertySearchPage {
+  results: PropertySearchResult[];
+  /** Total matches in ATTOM for this query (across all pages). */
+  total: number;
+  /** Results returned in this response after local filters. */
+  fetched: number;
+  pageSize: number;
+  hasMore: boolean;
 }
 
 export interface PropertySearchResult {
@@ -169,6 +215,10 @@ export interface PropertySearchResult {
   beds: number | null;
   baths: number | null;
   sqft: number | null;
+  yearBuilt?: number | null;
+  lotSqft?: number | null;
+  ownershipYears?: number | null;
+  ownerName?: string | null;
   estimatedValue: number | null;
   estimatedEquity: number | null;
   equityPercent: number | null;
@@ -287,4 +337,34 @@ export function strategyLabel(strategy: DealStrategy): string {
     follow_up_later: "Follow Up Later",
   };
   return labels[strategy];
+}
+
+export function propertyTypeLabel(type: PropertyType): string {
+  const labels: Record<PropertyType, string> = {
+    single_family: "Single Family Residential",
+    multi_family: "Multi Family",
+    condo: "Condominium",
+    townhouse: "Townhouse",
+    land: "Land",
+    commercial: "Commercial",
+    other: "Other",
+  };
+  return labels[type];
+}
+
+export function equityRating(equityPercent: number | null | undefined): string {
+  if (equityPercent == null) return "—";
+  if (equityPercent >= 60) return "High";
+  if (equityPercent >= 35) return "Medium";
+  return "Low";
+}
+
+/** Rough monthly rent estimate when rent comps are unavailable. */
+export function estimateMonthlyRent(
+  avm: number | null | undefined,
+  sqft: number | null | undefined,
+): number | null {
+  if (avm != null && avm > 0) return Math.round(avm * 0.007);
+  if (sqft != null && sqft > 0) return Math.round(sqft * 1.15);
+  return null;
 }

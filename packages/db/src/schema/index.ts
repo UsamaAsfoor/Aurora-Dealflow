@@ -233,14 +233,84 @@ export const usersRelations = relations(users, ({ many }) => ({
 }));
 
 export const propertiesRelations = relations(properties, ({ one, many }) => ({
-  owner: one(propertyOwners),
-  valuation: one(propertyValuations),
-  mortgage: one(propertyMortgages),
-  tax: one(propertyTaxes),
+  owner: one(propertyOwners, {
+    fields: [properties.id],
+    references: [propertyOwners.propertyId],
+  }),
+  valuation: one(propertyValuations, {
+    fields: [properties.id],
+    references: [propertyValuations.propertyId],
+  }),
+  mortgage: one(propertyMortgages, {
+    fields: [properties.id],
+    references: [propertyMortgages.propertyId],
+  }),
+  tax: one(propertyTaxes, {
+    fields: [properties.id],
+    references: [propertyTaxes.propertyId],
+  }),
   sales: many(propertySales),
   comps: many(propertyComps),
   leads: many(leads),
-  aiAnalysis: one(aiAnalyses),
+  aiAnalysis: one(aiAnalyses, {
+    fields: [properties.id],
+    references: [aiAnalyses.propertyId],
+  }),
+}));
+
+export const propertyOwnersRelations = relations(propertyOwners, ({ one }) => ({
+  property: one(properties, {
+    fields: [propertyOwners.propertyId],
+    references: [properties.id],
+  }),
+}));
+
+export const propertyValuationsRelations = relations(
+  propertyValuations,
+  ({ one }) => ({
+    property: one(properties, {
+      fields: [propertyValuations.propertyId],
+      references: [properties.id],
+    }),
+  }),
+);
+
+export const propertyMortgagesRelations = relations(
+  propertyMortgages,
+  ({ one }) => ({
+    property: one(properties, {
+      fields: [propertyMortgages.propertyId],
+      references: [properties.id],
+    }),
+  }),
+);
+
+export const propertyTaxesRelations = relations(propertyTaxes, ({ one }) => ({
+  property: one(properties, {
+    fields: [propertyTaxes.propertyId],
+    references: [properties.id],
+  }),
+}));
+
+export const propertySalesRelations = relations(propertySales, ({ one }) => ({
+  property: one(properties, {
+    fields: [propertySales.propertyId],
+    references: [properties.id],
+  }),
+}));
+
+export const propertyCompsRelations = relations(propertyComps, ({ one }) => ({
+  property: one(properties, {
+    fields: [propertyComps.propertyId],
+    references: [properties.id],
+  }),
+}));
+
+export const aiAnalysesRelations = relations(aiAnalyses, ({ one }) => ({
+  property: one(properties, {
+    fields: [aiAnalyses.propertyId],
+    references: [properties.id],
+  }),
 }));
 
 export const leadsRelations = relations(leads, ({ one }) => ({

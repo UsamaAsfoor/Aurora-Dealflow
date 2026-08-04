@@ -32,7 +32,7 @@ export function LoginForm() {
 
   useEffect(() => {
     if (user) {
-      router.replace("/dashboard/search");
+      router.replace("/dashboard");
     }
   }, [user, router]);
 
@@ -54,7 +54,7 @@ export function LoginForm() {
         ...result.user,
         role: result.user.role as "wholesaler" | "buyer" | "admin" | undefined,
       });
-      router.push("/dashboard/search");
+      router.push("/dashboard");
     } catch (err) {
       if (err instanceof TRPCClientError) {
         setError(err.message);

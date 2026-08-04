@@ -19,22 +19,17 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { formatAddress } from "@aurora/core";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { trpc } from "@/lib/trpc";
+import { trpc, type AppRouter } from "@/lib/trpc";
+import type { inferRouterOutputs } from "@aurora/trpc";
 
-type BoardLead = {
-  id: string;
-  line1: string;
-  city: string;
-  state: string;
-  zip: string;
-  source: string;
-};
+type BoardStage = inferRouterOutputs<AppRouter>["pipeline"]["listBoard"][number];
+type BoardLead = BoardStage["leads"][number];
 
-function LeadCard({
+const LeadCard = memo(function LeadCard({
   lead,
   dragging,
 }: {
@@ -62,25 +57,31 @@ function LeadCard({
           href={`/dashboard/leads/${lead.id}`}
           className="mt-3 inline-block text-xs font-medium text-[#e0b02a] hover:underline"
           onClick={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
         >
           Open lead →
         </Link>
       </CardContent>
     </Card>
   );
-}
+});
 
-function SortableLead({ lead }: { lead: BoardLead }) {
+const SortableLead = memo(function SortableLead({ lead }: { lead: BoardLead }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: lead.id, data: { lead } });
+
+  const style = useMemo(
+    () => ({
+      transform: CSS.Transform.toString(transform),
+      transition,
+    }),
+    [transform, transition],
+  );
 
   return (
     <div
       ref={setNodeRef}
-      style={{
-        transform: CSS.Transform.toString(transform),
-        transition,
-      }}
+      style={style}
       className={cn(isDragging && "opacity-40")}
       {...attributes}
       {...listeners}
@@ -88,9 +89,9 @@ function SortableLead({ lead }: { lead: BoardLead }) {
       <LeadCard lead={lead} />
     </div>
   );
-}
+});
 
-function StageColumn({
+const StageColumn = memo(function StageColumn({
   stageId,
   name,
   color,
@@ -102,6 +103,7 @@ function StageColumn({
   leads: BoardLead[];
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: stageId });
+  const itemIds = useMemo(() => leads.map((l) => l.id), [leads]);
 
   return (
     <div
@@ -121,10 +123,7 @@ function StageColumn({
         </div>
         <Badge variant="outline">{leads.length}</Badge>
       </div>
-      <SortableContext
-        items={leads.map((l) => l.id)}
-        strategy={verticalListSortingStrategy}
-      >
+      <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
         <div className="max-h-[calc(100vh-16rem)] space-y-2 overflow-y-auto p-3">
           {leads.length === 0 ? (
             <p className="py-8 text-center text-xs text-[#6f675c]">
@@ -137,18 +136,65 @@ function StageColumn({
       </SortableContext>
     </div>
   );
+});
+
+function moveLeadOptimistic(
+  stages: BoardStage[],
+  leadId: string,
+  targetStageId: string,
+): BoardStage[] {
+  let moving: BoardLead | undefined;
+  const without = stages.map((stage) => {
+    const nextLeads = stage.leads.filter((lead) => {
+      if (lead.id === leadId) {
+        moving = lead;
+        return false;
+      }
+      return true;
+    });
+    return nextLeads.length === stage.leads.length
+      ? stage
+      : { ...stage, leads: nextLeads };
+  });
+  if (!moving) return stages;
+  const lead = moving;
+  return without.map((stage) =>
+    stage.id === targetStageId
+      ? { ...stage, leads: [...stage.leads, lead] }
+      : stage,
+  );
 }
 
 export function PipelineBoard() {
   const utils = trpc.useUtils();
-  const boardQuery = trpc.pipeline.listBoard.useQuery();
+  const boardQuery = trpc.pipeline.listBoard.useQuery(undefined, {
+    staleTime: 60_000,
+  });
   const moveLead = trpc.pipeline.moveLead.useMutation({
-    onSuccess: () => utils.pipeline.listBoard.invalidate(),
+    onMutate: async ({ leadId, stageId }) => {
+      await utils.pipeline.listBoard.cancel();
+      const previous = utils.pipeline.listBoard.getData();
+      if (previous) {
+        utils.pipeline.listBoard.setData(
+          undefined,
+          moveLeadOptimistic(previous, leadId, stageId),
+        );
+      }
+      return { previous };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.previous) {
+        utils.pipeline.listBoard.setData(undefined, ctx.previous);
+      }
+    },
+    onSettled: () => {
+      void utils.pipeline.listBoard.invalidate();
+    },
   });
   const [activeLead, setActiveLead] = useState<BoardLead | null>(null);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
   );
 
   const stages = boardQuery.data ?? [];
@@ -171,11 +217,10 @@ export function PipelineBoard() {
     setActiveLead(null);
     const leadId = String(event.active.id);
     const overId = event.over?.id ? String(event.over.id) : null;
-    if (!overId) return;
+    if (!overId || moveLead.isPending) return;
 
     let targetStageId = overId;
     if (!stages.some((s) => s.id === overId)) {
-      // Dropped on another lead — use that lead's stage
       targetStageId = leadStageMap.get(overId) ?? "";
     }
     if (!targetStageId) return;
@@ -184,6 +229,10 @@ export function PipelineBoard() {
     if (currentStageId === targetStageId) return;
 
     moveLead.mutate({ leadId, stageId: targetStageId });
+  }
+
+  function onDragCancel() {
+    setActiveLead(null);
   }
 
   if (boardQuery.isLoading) {
@@ -196,6 +245,7 @@ export function PipelineBoard() {
       collisionDetection={closestCorners}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
+      onDragCancel={onDragCancel}
     >
       <div className="flex gap-4 overflow-x-auto pb-4">
         {stages.map((stage) => (
@@ -208,7 +258,7 @@ export function PipelineBoard() {
           />
         ))}
       </div>
-      <DragOverlay>
+      <DragOverlay dropAnimation={null}>
         {activeLead ? <LeadCard lead={activeLead} dragging /> : null}
       </DragOverlay>
     </DndContext>

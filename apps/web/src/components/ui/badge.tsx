@@ -20,7 +20,7 @@ export function Badge({
         variant === "default" &&
           "bg-[var(--color-accent)] text-[var(--color-muted-foreground)] ring-1 ring-[var(--color-border)]",
         variant === "cyan" &&
-          "bg-[color-mix(in_srgb,var(--color-primary)_15%,transparent)] text-[var(--color-primary)] ring-1 ring-[color-mix(in_srgb,var(--color-primary)_30%,transparent)]",
+          "bg-[color-mix(in_srgb,var(--color-primary)_18%,transparent)] text-[color-mix(in_srgb,var(--color-primary)_55%,white)] ring-1 ring-[color-mix(in_srgb,var(--color-primary)_35%,transparent)]",
         variant === "success" &&
           "bg-[color-mix(in_srgb,var(--color-success)_15%,transparent)] text-[var(--color-success)] ring-1 ring-[color-mix(in_srgb,var(--color-success)_30%,transparent)]",
         variant === "warning" &&

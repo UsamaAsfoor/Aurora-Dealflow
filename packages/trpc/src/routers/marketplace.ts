@@ -409,7 +409,11 @@ export const marketplaceRouter = router({
         input.message ??
         `Aurora deal: Asking $${Number(listing.askingPrice ?? 0).toLocaleString()} / ARV $${Number(listing.arv ?? 0).toLocaleString()} — ${listing.city}, ${listing.state}. Open: ${deepLink}`;
 
-      const comms = createCommsService();
+      const { getUserSmsCredentials } = await import(
+        "../services/messaging-credentials.js"
+      );
+      const byoSms = await getUserSmsCredentials(ctx.db, ctx.userId, "twilio");
+      const comms = createCommsService({ sms: byoSms });
       const results: Array<Record<string, unknown>> = [];
 
       for (const buyer of matched) {

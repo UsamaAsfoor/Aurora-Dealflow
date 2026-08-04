@@ -148,6 +148,36 @@ export async function upsertPropertySnapshot(
   });
 }
 
+/** Persist / refresh owner row without wiping valuation, tax, sales, or comps. */
+export async function upsertPropertyOwner(
+  db: Db,
+  propertyId: string,
+  owner: NonNullable<NormalizedProperty["owner"]>,
+  ownershipYears?: number | null,
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(propertyOwners)
+      .where(eq(propertyOwners.propertyId, propertyId));
+    await tx.insert(propertyOwners).values({
+      propertyId,
+      name: owner.name,
+      mailingLine1: owner.mailingAddress.line1,
+      mailingLine2: owner.mailingAddress.line2,
+      mailingCity: owner.mailingAddress.city,
+      mailingState: owner.mailingAddress.state,
+      mailingZip: owner.mailingAddress.zip,
+      isAbsentee: owner.isAbsentee,
+    });
+    if (ownershipYears !== undefined) {
+      await tx
+        .update(properties)
+        .set({ ownershipYears: ownershipYears ?? null, updatedAt: new Date() })
+        .where(eq(properties.id, propertyId));
+    }
+  });
+}
+
 export async function propertyFromDb(
   db: Db,
   propertyId: string,
@@ -165,6 +195,9 @@ export async function propertyFromDb(
   });
 
   if (!rows) return null;
+
+  const sales = rows.sales ?? [];
+  const comps = rows.comps ?? [];
 
   return {
     attomId: rows.attomId,
@@ -219,12 +252,12 @@ export async function propertyFromDb(
         ? Number(rows.tax.delinquentAmount)
         : null,
     },
-    sales: rows.sales.map((sale) => ({
+    sales: sales.map((sale) => ({
       saleDate: sale.saleDate?.toISOString() ?? null,
       salePrice: sale.salePrice ? Number(sale.salePrice) : null,
       saleType: sale.saleType,
     })),
-    comps: rows.comps.map((comp) => ({
+    comps: comps.map((comp) => ({
       attomId: comp.compAttomId,
       address: {
         line1: comp.line1,
@@ -238,10 +271,30 @@ export async function propertyFromDb(
       beds: comp.beds,
       baths: comp.baths ? Number(comp.baths) : null,
       sqft: comp.sqft,
+      lotSqft: null,
+      latitude: null,
+      longitude: null,
     })),
     isVacant: rows.isVacant,
     isPreForeclosure: rows.isPreForeclosure,
     ownershipYears: rows.ownershipYears,
+    apn: null,
+    ownerType: rows.owner
+      ? /\b(llc|inc|corp|trust|lp|ltd)\b/i.test(rows.owner.name)
+        ? "Company"
+        : "Individual"
+      : null,
+    purchaseMethod:
+      rows.valuation?.estimatedMortgageBalance &&
+      Number(rows.valuation.estimatedMortgageBalance) > 0
+        ? "Financed"
+        : null,
+    openMortgageCount:
+      rows.valuation?.estimatedMortgageBalance != null
+        ? Number(rows.valuation.estimatedMortgageBalance) > 0
+          ? 1
+          : 0
+        : null,
   };
 }
 

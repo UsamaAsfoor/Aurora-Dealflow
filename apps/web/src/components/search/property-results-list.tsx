@@ -145,9 +145,14 @@ export function PropertyResultsList({
         <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--color-accent)] text-xs font-semibold text-[var(--color-muted-foreground)] ring-1 ring-[var(--color-border)]">
           0
         </div>
-        <p className="max-w-[240px] text-sm leading-relaxed text-[var(--color-muted-foreground)]">
-          {emptyMessage}
-        </p>
+        <div className="space-y-1">
+          <p className="text-sm font-medium text-[var(--color-foreground)]">
+            No matches
+          </p>
+          <p className="max-w-[260px] text-sm leading-relaxed text-[var(--color-muted-foreground)]">
+            {emptyMessage}
+          </p>
+        </div>
         {intentLabel && (
           <Badge variant="outline" className="capitalize normal-case">
             {intentLabel.replace(/_/g, " ")}

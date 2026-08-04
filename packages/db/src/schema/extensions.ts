@@ -8,6 +8,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import { leads, properties, users } from "./index.js";
@@ -474,3 +475,42 @@ export const buyersRelations = relations(buyers, ({ one }) => ({
     references: [buyBoxes.buyerId],
   }),
 }));
+
+/**
+ * Bring-your-own messaging credentials (Twilio first; provider column allows more).
+ * Secrets are stored encrypted (ciphertext), never plaintext.
+ */
+export const messagingProviderCredentials = pgTable(
+  "messaging_provider_credentials",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** twilio | (future: bandwidth, messagebird, …) */
+    provider: text("provider").notNull(),
+    /** Non-secret display fields (e.g. masked from number, account sid prefix) */
+    label: text("label"),
+    accountSid: text("account_sid"),
+    fromNumber: text("from_number"),
+    /** AES-GCM encrypted JSON blob for auth token (and future secret fields) */
+    secretsCiphertext: text("secrets_ciphertext").notNull(),
+    secretsNonce: text("secrets_nonce").notNull(),
+    isActive: boolean("is_active").default(true).notNull(),
+    lastVerifiedAt: timestamp("last_verified_at", { withTimezone: true }),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("messaging_provider_credentials_user_id_idx").on(table.userId),
+    uniqueIndex("messaging_provider_credentials_user_provider_uidx").on(
+      table.userId,
+      table.provider,
+    ),
+  ],
+);

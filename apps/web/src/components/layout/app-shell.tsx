@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import {
   LogOut,
   Briefcase,
+  LayoutDashboard,
   Megaphone,
   Search,
   Settings,
@@ -16,6 +17,7 @@ import {
   X,
   Shield,
   Store,
+  Plug,
 } from "lucide-react";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { ThemeProvider } from "@/lib/theme";
@@ -35,6 +37,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 }
 
 const navItems = [
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/dashboard/search", label: "Search", icon: Search },
   { href: "/dashboard/pipeline", label: "Pipeline", icon: Kanban },
   { href: "/dashboard/leads", label: "Leads", icon: Users },
@@ -45,6 +48,7 @@ const navItems = [
 ];
 
 const bottomNavItems = [
+  { href: "/dashboard/settings/integrations", label: "Integrations", icon: Plug },
   { href: "/dashboard/settings/billing", label: "Billing", icon: Settings },
   { href: "/dashboard/admin", label: "Admin", icon: Shield },
 ];
@@ -68,6 +72,7 @@ function NavLink({
     <Link
       href={href}
       onClick={onNavigate}
+      prefetch
       title={compact ? label : undefined}
       className={cn(
         "flex items-center rounded-md text-sm font-medium transition-all",
@@ -94,7 +99,7 @@ function SidebarContent({
   const { user, logout } = useAuth();
 
   return (
-    <div className="flex h-full flex-col bg-[var(--color-background)]">
+    <div className="flex h-full w-full flex-col bg-[var(--color-background)]">
       <div
         className={cn(
           "border-b border-[var(--color-border)]",
@@ -102,7 +107,8 @@ function SidebarContent({
         )}
       >
         <Link
-          href="/dashboard/search"
+          href="/dashboard"
+          prefetch
           className={cn(
             "group flex items-center",
             compact ? "justify-center" : "gap-3",
@@ -143,7 +149,10 @@ function SidebarContent({
             {...item}
             compact={compact}
             active={
-              pathname === item.href || pathname.startsWith(`${item.href}/`)
+              item.href === "/dashboard"
+                ? pathname === "/dashboard"
+                : pathname === item.href ||
+                  pathname.startsWith(`${item.href}/`)
             }
             onNavigate={onNavigate}
           />
@@ -215,7 +224,7 @@ function SidebarContent({
 function DashboardSidebarLayout({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = usePathname();
-  const isSearch = pathname === "/dashboard/search";
+  const isSearch = pathname.startsWith("/dashboard/search");
 
   useEffect(() => {
     setMobileOpen(false);
@@ -224,13 +233,14 @@ function DashboardSidebarLayout({ children }: { children: React.ReactNode }) {
   return (
     <div
       className={cn(
-        "flex",
-        isSearch ? "h-screen overflow-hidden" : "min-h-screen",
+        "flex w-full",
+        isSearch ? "h-dvh overflow-hidden" : "min-h-dvh",
       )}
     >
+      {/* In-flow desktop sidebar — never overlays page content */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 hidden border-r border-[var(--color-border)] bg-[var(--color-background)] lg:flex",
+          "sticky top-0 z-40 hidden h-dvh shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-background)] lg:flex",
           isSearch ? "w-14" : "w-60",
         )}
       >
@@ -266,15 +276,14 @@ function DashboardSidebarLayout({ children }: { children: React.ReactNode }) {
 
       <div
         className={cn(
-          "flex flex-1 flex-col",
-          isSearch ? "h-screen min-h-0" : "min-h-screen",
-          isSearch ? "lg:pl-14" : "lg:pl-60",
+          "flex min-w-0 flex-1 flex-col",
+          isSearch ? "h-dvh min-h-0 overflow-hidden" : "min-h-dvh",
         )}
       >
         <header
           className={cn(
-            "sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-[var(--color-border)] bg-[var(--color-background)]/90 px-4 backdrop-blur-xl lg:hidden",
-            isSearch && "absolute inset-x-0 top-0 border-none bg-transparent",
+            "sticky top-0 z-30 flex h-14 shrink-0 items-center gap-3 border-b border-[var(--color-border)] bg-[var(--color-background)]/90 px-4 backdrop-blur-xl lg:hidden",
+            isSearch && "absolute inset-x-0 top-0 z-30 border-none bg-transparent",
           )}
         >
           <button
@@ -292,7 +301,7 @@ function DashboardSidebarLayout({ children }: { children: React.ReactNode }) {
         </header>
         <main
           className={cn(
-            "flex-1",
+            "min-w-0 flex-1",
             isSearch && "flex min-h-0 flex-col overflow-hidden",
           )}
         >
@@ -307,7 +316,7 @@ function PublicHeader({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-dvh">
       <header className="sticky top-0 z-50 border-b border-[var(--color-border)] bg-[var(--color-background)]/90 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 lg:px-6">
           <Link href="/" className="group flex items-center gap-2.5">
@@ -329,7 +338,7 @@ function PublicHeader({ children }: { children: React.ReactNode }) {
             ) : (
               <>
                 <Button variant="secondary" size="sm" asChild>
-                  <Link href="/dashboard/search">Dashboard</Link>
+                  <Link href="/dashboard">Dashboard</Link>
                 </Button>
                 <Button variant="ghost" size="sm" onClick={logout}>
                   Sign Out
@@ -348,7 +357,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { user } = useAuth();
 
-  const isDashboard = pathname.startsWith("/dashboard") && user;
+  const isDashboard = pathname.startsWith("/dashboard") && Boolean(user);
 
   if (isDashboard) {
     return <DashboardSidebarLayout>{children}</DashboardSidebarLayout>;
@@ -371,9 +380,11 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
   if (isLoading || !user || !token) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-[var(--color-background)]">
+      <div className="flex min-h-dvh flex-col items-center justify-center gap-3 bg-[var(--color-background)]">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--color-border)] border-t-[var(--color-primary)]" />
-        <p className="text-sm text-[var(--color-muted-foreground)]">Loading your workspace...</p>
+        <p className="text-sm text-[var(--color-muted-foreground)]">
+          Loading your workspace...
+        </p>
       </div>
     );
   }

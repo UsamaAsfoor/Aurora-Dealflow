@@ -436,6 +436,7 @@ export function buildSearchParams(
   const params: PropertySearchParams = {
     sortBy: state.sortBy,
     filters,
+    limit: 250,
   };
 
   if (state.polygon) {
@@ -452,8 +453,27 @@ export function buildSearchParams(
     if (state.state.trim()) params.state = state.state.trim().toUpperCase();
   }
 
-  if (fields.address?.trim()) {
-    params.query = fields.address.trim();
+  const address = fields.address?.trim();
+  const isAddressLookup =
+    state.intent === "specific_property" ||
+    (Boolean(address) &&
+      !state.zip.trim() &&
+      !state.city.trim() &&
+      !state.county.trim());
+
+  if (address) {
+    params.query = address;
+  }
+
+  if (isAddressLookup && address) {
+    params.lookupMode = "address";
+    // Address lookup must not mix with ZIP/city area filters
+    delete params.zip;
+    delete params.city;
+    delete params.county;
+    delete params.state;
+  } else {
+    params.lookupMode = "area";
   }
 
   if (state.intent === "radius_search" && fields.radiusMiles) {
@@ -464,6 +484,10 @@ export function buildSearchParams(
 }
 
 export function formatAreaSummary(state: SearchWorkspaceState): string {
+  if (state.intentFields.address?.trim()) {
+    return state.intentFields.address.trim();
+  }
+
   if (state.polygon) return "Custom map area";
 
   if (state.areaMode === "county" && state.county.trim()) {
@@ -485,6 +509,52 @@ export function formatAreaSummary(state: SearchWorkspaceState): string {
   return "No area selected";
 }
 
+/** Human-readable label for what the current search will run. */
+export function formatSearchTarget(state: SearchWorkspaceState): {
+  kind: "zip" | "address" | "city" | "county" | "none";
+  label: string;
+  detail: string;
+} {
+  const address = state.intentFields.address?.trim();
+  if (address) {
+    return {
+      kind: "address",
+      label: "Address lookup",
+      detail: address,
+    };
+  }
+  if (state.areaMode === "zip" && state.zip.trim().length >= 5) {
+    return {
+      kind: "zip",
+      label: "ZIP search",
+      detail: `ZIP ${state.zip.trim()}`,
+    };
+  }
+  if (state.areaMode === "city" && state.city.trim() && state.state.trim()) {
+    return {
+      kind: "city",
+      label: "City search",
+      detail: `${state.city.trim()}, ${state.state.trim().toUpperCase()}`,
+    };
+  }
+  if (
+    state.areaMode === "county" &&
+    state.county.trim() &&
+    state.state.trim()
+  ) {
+    return {
+      kind: "county",
+      label: "County search",
+      detail: `${state.county.trim()} County, ${state.state.trim().toUpperCase()}`,
+    };
+  }
+  return {
+    kind: "none",
+    label: "No search yet",
+    detail: "Enter a ZIP code or full street address",
+  };
+}
+
 export type LocationSuggestionKind = "zip" | "city" | "county" | "address";
 
 export interface LocationSuggestion {
@@ -495,32 +565,94 @@ export interface LocationSuggestion {
   patch: Partial<SearchWorkspaceState>;
 }
 
+export type DetectedSearchKind =
+  | "zip"
+  | "zip_partial"
+  | "address"
+  | "city"
+  | "county"
+  | "city_hint"
+  | "unknown";
+
+const STREET_SUFFIX =
+  /\b(st|street|ave|avenue|rd|road|dr|drive|ln|lane|blvd|boulevard|ct|court|way|cir|circle|hwy|highway|pkwy|parkway|ter|terrace|pl|place|trl|trail)\b/i;
+
+/** Detect whether free-text input is a ZIP, street address, city, or county. */
+export function detectSearchInput(raw: string): {
+  kind: DetectedSearchKind;
+  label: string;
+} {
+  const q = raw.trim();
+  if (!q) return { kind: "unknown", label: "Type a ZIP or address" };
+
+  if (/^(\d{5})(-\d{4})?$/.test(q)) {
+    return { kind: "zip", label: "ZIP code" };
+  }
+  if (/^\d{3,4}$/.test(q)) {
+    return { kind: "zip_partial", label: "ZIP code" };
+  }
+
+  // Street number + name (e.g. "742 Evergreen Terrace, Springfield, IL")
+  const looksLikeAddress =
+    /^\d+\s+[A-Za-z0-9]/.test(q) ||
+    (/\d/.test(q) && STREET_SUFFIX.test(q) && q.length >= 8);
+  if (looksLikeAddress) {
+    return { kind: "address", label: "Street address" };
+  }
+
+  if (/county/i.test(q) && /,\s*[A-Za-z]{2}$/i.test(q)) {
+    return { kind: "county", label: "County" };
+  }
+  if (/^[A-Za-z][A-Za-z\s.'-]+,\s*[A-Za-z]{2}$/.test(q)) {
+    return { kind: "city", label: "City" };
+  }
+  if (/^[A-Za-z][A-Za-z\s.'-]{2,}$/.test(q)) {
+    return { kind: "city_hint", label: "City (add state)" };
+  }
+
+  return { kind: "unknown", label: "Location" };
+}
+
+function clearAreaPatch(): Partial<SearchWorkspaceState> {
+  return {
+    zip: "",
+    city: "",
+    county: "",
+    state: "",
+    polygon: null,
+  };
+}
+
 /** Parse free-text location into PropStream-style suggestions. */
 export function getLocationSuggestions(query: string): LocationSuggestion[] {
   const q = query.trim();
   if (!q) return [];
 
   const suggestions: LocationSuggestion[] = [];
+  const detected = detectSearchInput(q);
+
   const zipMatch = q.match(/^(\d{5})(-\d{4})?$/);
   if (zipMatch) {
     suggestions.push({
       id: `zip-${zipMatch[1]}`,
       kind: "zip",
       label: zipMatch[1]!,
-      description: "ZIP code",
+      description: "Search all properties in this ZIP",
       patch: {
         areaMode: "zip",
         zip: zipMatch[1]!,
         city: "",
         county: "",
         state: "",
+        polygon: null,
+        intent: "list_building",
         intentFields: {},
       },
     });
     return suggestions;
   }
 
-  // "Sangamon County, IL" or "Sangamon, IL"
+  // "Sangamon County, IL"
   const countyMatch = q.match(
     /^([A-Za-z][A-Za-z\s.'-]+?)\s*(?:County)?\s*,\s*([A-Za-z]{2})$/i,
   );
@@ -531,13 +663,15 @@ export function getLocationSuggestions(query: string): LocationSuggestion[] {
       id: `county-${county}-${state}`,
       kind: "county",
       label: `${county} County, ${state}`,
-      description: "County",
+      description: "Search properties in this county",
       patch: {
         areaMode: "county",
         county,
         state,
         zip: "",
         city: "",
+        polygon: null,
+        intent: "list_building",
         intentFields: {},
       },
     });
@@ -552,13 +686,15 @@ export function getLocationSuggestions(query: string): LocationSuggestion[] {
       id: `city-${city}-${state}`,
       kind: "city",
       label: `${city}, ${state}`,
-      description: "City",
+      description: "Search properties in this city",
       patch: {
         areaMode: "city",
         city,
         state,
         zip: "",
         county: "",
+        polygon: null,
+        intent: "list_building",
         intentFields: {},
       },
     });
@@ -573,13 +709,15 @@ export function getLocationSuggestions(query: string): LocationSuggestion[] {
         state,
         zip: "",
         city: "",
+        polygon: null,
+        intent: "list_building",
         intentFields: {},
       },
     });
   }
 
   // Partial ZIP while typing
-  if (/^\d{3,4}$/.test(q)) {
+  if (detected.kind === "zip_partial") {
     suggestions.push({
       id: `zip-partial-${q}`,
       kind: "zip",
@@ -591,18 +729,21 @@ export function getLocationSuggestions(query: string): LocationSuggestion[] {
         city: "",
         county: "",
         state: "",
+        polygon: null,
       },
     });
   }
 
-  // Street address heuristic
-  if (/\d/.test(q) && q.length >= 8 && !zipMatch) {
+  // Full street address → single-property lookup
+  if (detected.kind === "address") {
     suggestions.push({
       id: `address-${q}`,
       kind: "address",
       label: q,
-      description: "Specific property address",
+      description: "Look up this exact property",
       patch: {
+        areaMode: "zip",
+        ...clearAreaPatch(),
         intent: "specific_property",
         intentFields: { address: q },
       },
@@ -610,7 +751,7 @@ export function getLocationSuggestions(query: string): LocationSuggestion[] {
   }
 
   // Generic city name without state — nudge user
-  if (suggestions.length === 0 && /^[A-Za-z][A-Za-z\s.'-]{2,}$/.test(q)) {
+  if (suggestions.length === 0 && detected.kind === "city_hint") {
     suggestions.push({
       id: `hint-city-${q}`,
       kind: "city",
@@ -622,6 +763,7 @@ export function getLocationSuggestions(query: string): LocationSuggestion[] {
         state: "",
         zip: "",
         county: "",
+        polygon: null,
       },
     });
     suggestions.push({
@@ -635,6 +777,7 @@ export function getLocationSuggestions(query: string): LocationSuggestion[] {
         state: "",
         zip: "",
         city: "",
+        polygon: null,
       },
     });
   }
@@ -668,11 +811,26 @@ export function getAppliedFilterChips(
   state: SearchWorkspaceState,
 ): AppliedFilterChip[] {
   const chips: AppliedFilterChip[] = [];
+  const target = formatSearchTarget(state);
 
-  if (formatAreaSummary(state) !== "No area selected") {
+  if (target.kind === "address") {
+    chips.push({
+      id: "address",
+      label: `Address · ${target.detail}`,
+      clear: {
+        intent: "list_building",
+        intentFields: {},
+        zip: "",
+        city: "",
+        county: "",
+        state: "",
+        polygon: null,
+      },
+    });
+  } else if (target.kind !== "none") {
     chips.push({
       id: "area",
-      label: formatAreaSummary(state),
+      label: `${target.label.replace(" search", "")} · ${target.detail}`,
       clear: {
         zip: "",
         city: "",
@@ -684,7 +842,10 @@ export function getAppliedFilterChips(
     });
   }
 
-  if (state.intent !== "list_building") {
+  if (
+    state.intent !== "list_building" &&
+    state.intent !== "specific_property"
+  ) {
     chips.push({
       id: "lead-list",
       label: getIntentDefinition(state.intent).label,
@@ -749,7 +910,16 @@ export function formatActiveSummary(state: SearchWorkspaceState): string[] {
   return parts.filter((part) => part !== "No area selected");
 }
 
-export function getEmptyStateMessage(intent: SearchMode): string {
+export function getEmptyStateMessage(
+  intent: SearchMode,
+  options?: { address?: string; zip?: string },
+): string {
+  if (intent === "specific_property" || options?.address) {
+    return options?.address
+      ? `No property found for “${options.address}”. Check spelling, include city/state/ZIP, or search a ZIP code instead.`
+      : "Property not found. Enter a full street address (e.g. 742 Evergreen Terrace, Springfield, IL 62704).";
+  }
+
   switch (intent) {
     case "vacant":
       return "No vacant properties matched. Try ZIP 62704 with Build a List, then narrow filters.";
@@ -758,10 +928,10 @@ export function getEmptyStateMessage(intent: SearchMode): string {
       return "No listings matched. Try a different MLS number or listing status.";
     case "expired_listings":
       return "No expired listings found. Try reducing minimum days expired.";
-    case "specific_property":
-      return "Property not found. Check the address or switch to a ZIP search.";
     default:
-      return "No properties matched. Search ZIP 62704, then click View Properties.";
+      return options?.zip
+        ? `No properties matched in ZIP ${options.zip}. Try a nearby ZIP or clear filters.`
+        : "No properties matched. Enter a 5-digit ZIP for inventory, or a full street address for a single property.";
   }
 }
 

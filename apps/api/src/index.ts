@@ -13,7 +13,7 @@ import {
 import { processDueCampaignSteps } from "@aurora/trpc";
 
 const PORT = Number(process.env.PORT ?? 4000);
-const WEB_ORIGIN = process.env.WEB_ORIGIN ?? "http://localhost:3000";
+const WEB_ORIGIN = process.env.WEB_ORIGIN ?? "http://localhost:3001";
 const DATABASE_URL =
   process.env.DATABASE_URL ??
   "postgresql://aurora:aurora@localhost:5434/aurora_dealflow";
@@ -30,10 +30,27 @@ const metrics = {
 
 const app = express();
 
+const corsOrigins = new Set(
+  [
+    WEB_ORIGIN,
+    "http://localhost:3001",
+    "http://127.0.0.1:3001",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+  ].filter(Boolean),
+);
+
 app.use(
   cors({
-    origin: WEB_ORIGIN,
+    origin(origin, callback) {
+      if (!origin || corsOrigins.has(origin)) {
+        callback(null, true);
+        return;
+      }
+      callback(new Error(`Origin ${origin} not allowed by CORS`));
+    },
     credentials: true,
+    allowedHeaders: ["Content-Type", "Authorization"],
   }),
 );
 
