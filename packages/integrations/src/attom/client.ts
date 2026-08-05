@@ -18,6 +18,7 @@ import {
   MAX_SEARCH_FETCH,
   formatAttomDate,
   soldWindowCutoffIso,
+  splitStreetAddress,
 } from "@aurora/core";
 import { computeSearchResultScore } from "@aurora/core/scoring";
 import { demoProperties, demoSearch, filterDemoComps } from "./demo-data.js";
@@ -601,25 +602,8 @@ export class AttomClient {
     });
   }
 
-  private splitAddressQuery(query: string): {
-    address: string;
-    address1?: string;
-    address2?: string;
-  } {
-    const trimmed = query.trim();
-    const comma = trimmed.indexOf(",");
-    if (comma > 0) {
-      return {
-        address: trimmed,
-        address1: trimmed.slice(0, comma).trim(),
-        address2: trimmed.slice(comma + 1).trim(),
-      };
-    }
-    return { address: trimmed };
-  }
-
   private async searchByAddress(query: string): Promise<PropertySearchPage> {
-    const split = this.splitAddressQuery(query);
+    const split = splitStreetAddress(query);
     const attempts: Array<{
       endpoint: string;
       params: Record<string, string | number | undefined>;

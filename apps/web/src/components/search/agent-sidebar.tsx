@@ -17,6 +17,9 @@ import type { SearchWorkspaceState } from "@/components/search/search-intents";
 
 export interface AgentSearchAction {
   type: "search";
+  /** Full street address for single-property map lookup */
+  address?: string;
+  query?: string;
   zip?: string;
   city?: string;
   state?: string;

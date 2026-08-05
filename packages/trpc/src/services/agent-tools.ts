@@ -34,6 +34,9 @@ export type ToolTraceItem = {
 
 export const searchActionSchema = z.object({
   type: z.literal("search"),
+  /** Full street address for single-property / map lookup */
+  address: z.string().optional(),
+  query: z.string().optional(),
   zip: z.string().optional(),
   city: z.string().optional(),
   state: z.string().optional(),
@@ -49,6 +52,7 @@ export const searchActionSchema = z.object({
       "mls_lookup",
       "emls",
       "radius_search",
+      "specific_property",
     ])
     .optional(),
   minPrice: z.string().optional(),
@@ -157,42 +161,69 @@ function tool(
 }
 
 const ALL_TOOL_DEFS: AgentToolDefinition[] = [
-  tool("emit_search_ui", "Update the map/search UI with a property search (Agent mode only).", {
-    properties: {
-      zip: { type: "string" },
-      city: { type: "string" },
-      state: { type: "string" },
-      areaMode: { type: "string", enum: ["zip", "city", "county"] },
-      intent: {
-        type: "string",
-        enum: [
-          "list_building",
-          "vacant",
-          "absentee",
-          "pre_foreclosure",
-          "tax_delinquent",
-          "expired_listings",
-          "mls_lookup",
-          "emls",
-          "radius_search",
-        ],
+  tool(
+    "emit_search_ui",
+    "Update the map/search UI. For a full street address use address + intent specific_property. For area inventory use zip/city/state.",
+    {
+      properties: {
+        address: {
+          type: "string",
+          description:
+            "Full street address, e.g. '1847 Maple Ave, Springfield, IL 62704'",
+        },
+        query: {
+          type: "string",
+          description: "Alias for address when looking up one property",
+        },
+        zip: { type: "string" },
+        city: { type: "string" },
+        state: { type: "string" },
+        areaMode: { type: "string", enum: ["zip", "city", "county"] },
+        intent: {
+          type: "string",
+          enum: [
+            "list_building",
+            "vacant",
+            "absentee",
+            "pre_foreclosure",
+            "tax_delinquent",
+            "expired_listings",
+            "mls_lookup",
+            "emls",
+            "radius_search",
+            "specific_property",
+          ],
+        },
+        minPrice: { type: "string" },
+        maxPrice: { type: "string" },
       },
-      minPrice: { type: "string" },
-      maxPrice: { type: "string" },
     },
-  }),
-  tool("search_properties", "Search ATTOM property inventory.", {
-    properties: {
-      zip: { type: "string" },
-      city: { type: "string" },
-      state: { type: "string" },
-      vacant: { type: "boolean" },
-      absentee: { type: "boolean" },
-      preForeclosure: { type: "boolean" },
-      taxDelinquent: { type: "boolean" },
-      limit: { type: "number" },
+  ),
+  tool(
+    "search_properties",
+    "Search ATTOM property inventory. Pass address/query for a full street address lookup; otherwise zip/city/state for area search.",
+    {
+      properties: {
+        address: {
+          type: "string",
+          description:
+            "Full street address for single-property lookup (preferred over reducing to ZIP)",
+        },
+        query: {
+          type: "string",
+          description: "Same as address — full street address string",
+        },
+        zip: { type: "string" },
+        city: { type: "string" },
+        state: { type: "string" },
+        vacant: { type: "boolean" },
+        absentee: { type: "boolean" },
+        preForeclosure: { type: "boolean" },
+        taxDelinquent: { type: "boolean" },
+        limit: { type: "number" },
+      },
     },
-  }),
+  ),
   tool("get_property", "Get a property by ATTOM id.", {
     required: ["attomId"],
     properties: { attomId: { type: "string" } },
@@ -391,7 +422,13 @@ function summarize(name: string, result: unknown, ok: boolean): string {
       const stages = result as Array<{ name: string; leads?: unknown[] }>;
       return `Pipeline: ${stages.map((s) => `${s.name}=${s.leads?.length ?? 0}`).join(", ")}`;
     }
-    if (name === "emit_search_ui") return "Updated search UI";
+    if (name === "emit_search_ui") {
+      const a = result as { address?: string; zip?: string; city?: string };
+      if (a.address) return `Map → ${a.address}`;
+      if (a.zip) return `Map → ZIP ${a.zip}`;
+      if (a.city) return `Map → ${a.city}`;
+      return "Updated search UI";
+    }
     if (name === "send_sms") return "SMS sent";
     if (name === "send_email") return "Email sent";
     if (name === "blast_buyers") return "Buyer blast queued";
@@ -502,9 +539,23 @@ export async function executeAgentTool(
   try {
     switch (name) {
       case "emit_search_ui": {
+        const address =
+          (typeof rawArgs.address === "string" && rawArgs.address.trim()) ||
+          (typeof rawArgs.query === "string" && rawArgs.query.trim()) ||
+          undefined;
         const action = searchActionSchema.parse({
           type: "search",
           ...rawArgs,
+          ...(address
+            ? {
+                address,
+                query: address,
+                intent: "specific_property",
+                zip: undefined,
+                city: undefined,
+                areaMode: undefined,
+              }
+            : {}),
         });
         return {
           ok: true,
@@ -514,6 +565,10 @@ export async function executeAgentTool(
         };
       }
       case "search_properties": {
+        const address =
+          (typeof rawArgs.address === "string" && rawArgs.address.trim()) ||
+          (typeof rawArgs.query === "string" && rawArgs.query.trim()) ||
+          undefined;
         const filters: {
           vacantOnly?: boolean;
           absenteeOnly?: boolean;
@@ -542,17 +597,33 @@ export async function executeAgentTool(
           filters.taxDelinquentOnly = true;
           filters.searchMode = "tax_delinquent";
         }
-        const result = await caller.property.search({
-          zip: rawArgs.zip as string | undefined,
-          city: rawArgs.city as string | undefined,
-          state: rawArgs.state as string | undefined,
-          filters: Object.keys(filters).length ? filters : undefined,
-          limit: (rawArgs.limit as number | undefined) ?? 50,
-          sortBy: "score",
-        });
+        const result = await caller.property.search(
+          address
+            ? {
+                query: address,
+                lookupMode: "address",
+                limit: (rawArgs.limit as number | undefined) ?? 10,
+                sortBy: "score",
+              }
+            : {
+                zip: rawArgs.zip as string | undefined,
+                city: rawArgs.city as string | undefined,
+                state: rawArgs.state as string | undefined,
+                filters: Object.keys(filters).length ? filters : undefined,
+                limit: (rawArgs.limit as number | undefined) ?? 50,
+                sortBy: "score",
+              },
+        );
         // Only Agent mode may drive the map/search workspace
         const uiActions: UiAction[] = [];
-        if (mode === "agent" && (rawArgs.zip || rawArgs.city)) {
+        if (mode === "agent" && address) {
+          uiActions.push({
+            type: "search",
+            address,
+            query: address,
+            intent: "specific_property",
+          });
+        } else if (mode === "agent" && (rawArgs.zip || rawArgs.city)) {
           uiActions.push({
             type: "search",
             zip: rawArgs.zip as string | undefined,

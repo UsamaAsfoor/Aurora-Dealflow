@@ -2,6 +2,7 @@
 
 import { MapPin, Search } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
+import { looksLikeStreetAddress } from "@aurora/core";
 import {
   detectSearchInput,
   getLocationSuggestions,
@@ -82,25 +83,50 @@ export function LocationSearchBar({
           }}
           onFocus={() => setOpen(true)}
           onKeyDown={(e) => {
-            if (!open || suggestions.length === 0) {
-              if (e.key === "Enter" && suggestions[0]) {
-                e.preventDefault();
-                commit(suggestions[0]);
-              }
+            if (e.key === "Escape") {
+              setOpen(false);
               return;
             }
-            if (e.key === "ArrowDown") {
+
+            if (e.key === "ArrowDown" && suggestions.length > 0) {
               e.preventDefault();
+              setOpen(true);
               setActiveIndex((i) => Math.min(i + 1, suggestions.length - 1));
-            } else if (e.key === "ArrowUp") {
+              return;
+            }
+            if (e.key === "ArrowUp" && suggestions.length > 0) {
               e.preventDefault();
               setActiveIndex((i) => Math.max(i - 1, 0));
-            } else if (e.key === "Enter") {
+              return;
+            }
+
+            if (e.key === "Enter") {
               e.preventDefault();
               const pick = suggestions[activeIndex] ?? suggestions[0];
-              if (pick) commit(pick);
-            } else if (e.key === "Escape") {
-              setOpen(false);
+              if (pick) {
+                commit(pick);
+                return;
+              }
+              // Commit raw full address even if suggestions list is empty
+              const q = query.trim();
+              if (looksLikeStreetAddress(q)) {
+                commit({
+                  id: `address-${q}`,
+                  kind: "address",
+                  label: q,
+                  description: "Look up this exact property",
+                  patch: {
+                    areaMode: "zip",
+                    zip: "",
+                    city: "",
+                    county: "",
+                    state: "",
+                    polygon: null,
+                    intent: "specific_property",
+                    intentFields: { address: q },
+                  },
+                });
+              }
             }
           }}
           placeholder="ZIP code or full street address…"

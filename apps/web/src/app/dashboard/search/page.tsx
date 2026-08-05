@@ -51,17 +51,35 @@ export default function SearchPage() {
 
   const handleAgentSearch = useCallback((action: AgentSearchAction) => {
     setState((current) => {
-      const next: SearchWorkspaceState = {
-        ...current,
-        areaMode: action.areaMode ?? (action.zip ? "zip" : current.areaMode),
-        zip: action.zip ?? current.zip,
-        city: action.city ?? current.city,
-        state: action.state ?? current.state,
-        intent: action.intent ?? current.intent,
-        minPrice: action.minPrice ?? current.minPrice,
-        maxPrice: action.maxPrice ?? current.maxPrice,
-        intentFields: action.zip ? {} : current.intentFields,
-      };
+      const address = (action.address ?? action.query)?.trim();
+
+      const next: SearchWorkspaceState = address
+        ? {
+            ...current,
+            areaMode: "zip",
+            zip: "",
+            city: "",
+            county: "",
+            state: "",
+            polygon: null,
+            intent: "specific_property",
+            intentFields: { address },
+            minPrice: action.minPrice ?? current.minPrice,
+            maxPrice: action.maxPrice ?? current.maxPrice,
+          }
+        : {
+            ...current,
+            areaMode:
+              action.areaMode ?? (action.zip ? "zip" : current.areaMode),
+            zip: action.zip ?? current.zip,
+            city: action.city ?? current.city,
+            state: action.state ?? current.state,
+            intent: action.intent ?? current.intent,
+            minPrice: action.minPrice ?? current.minPrice,
+            maxPrice: action.maxPrice ?? current.maxPrice,
+            intentFields: action.zip ? {} : current.intentFields,
+          };
+
       const params = buildSearchParams(next);
       if (params) {
         queueMicrotask(() => {

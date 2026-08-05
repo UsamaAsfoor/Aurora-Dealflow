@@ -8,6 +8,7 @@ import {
   Briefcase,
   LayoutDashboard,
   Megaphone,
+  Palette,
   Search,
   Settings,
   Users,
@@ -48,6 +49,7 @@ const navItems = [
 ];
 
 const bottomNavItems = [
+  { href: "/dashboard/settings/appearance", label: "Appearance", icon: Palette },
   { href: "/dashboard/settings/integrations", label: "Integrations", icon: Plug },
   { href: "/dashboard/settings/billing", label: "Billing", icon: Settings },
   { href: "/dashboard/admin", label: "Admin", icon: Shield },

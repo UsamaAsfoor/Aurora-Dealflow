@@ -1,3 +1,4 @@
+import { extractStreetAddress } from "@aurora/core";
 import type { CrmContextPack } from "./agent-context.js";
 import {
   detectSuggestedAgentAction,
@@ -24,8 +25,20 @@ export type AgentTurnResult = {
 
 function parseSearchIntent(userText: string): SearchAction | null {
   const text = userText.trim();
-  const zipMatch = text.match(/\b(\d{5})\b/);
   const lower = text.toLowerCase();
+
+  // Full street address must win over ZIP-inside-address (e.g. "… IL 62704")
+  const streetAddress = extractStreetAddress(text);
+  if (streetAddress) {
+    return searchActionSchema.parse({
+      type: "search",
+      address: streetAddress,
+      query: streetAddress,
+      intent: "specific_property",
+    });
+  }
+
+  const zipMatch = text.match(/\b(\d{5})\b/);
 
   let intent: SearchAction["intent"] | undefined;
   if (/\bvacant\b/.test(lower)) intent = "vacant";
@@ -182,18 +195,25 @@ export async function runDemoAgentTurn(input: {
     const absentee = search.intent === "absentee";
     const pre = search.intent === "pre_foreclosure";
     const tax = search.intent === "tax_delinquent";
+    const isAddress = Boolean(search.address || search.query);
 
     const exec = await executeAgentTool(
       "search_properties",
-      {
-        zip: search.zip,
-        state: search.state,
-        vacant,
-        absentee,
-        preForeclosure: pre,
-        taxDelinquent: tax,
-        limit: 20,
-      },
+      isAddress
+        ? {
+            address: search.address ?? search.query,
+            query: search.address ?? search.query,
+            limit: 10,
+          }
+        : {
+            zip: search.zip,
+            state: search.state,
+            vacant,
+            absentee,
+            preForeclosure: pre,
+            taxDelinquent: tax,
+            limit: 20,
+          },
       caller,
       mode,
     );
@@ -232,14 +252,26 @@ export async function runDemoAgentTurn(input: {
         ? search.intent.replace(/_/g, " ")
         : null;
 
+    const targetLabel = isAddress
+      ? (search.address ?? search.query ?? "address")
+      : `ZIP **${search.zip}**`;
+
     if (mode === "ask") {
       parts.push(
         [
-          `## Research: ZIP **${search.zip}**`,
-          intentLabel ? `Filter focus: **${intentLabel}**` : null,
+          isAddress
+            ? `## Research: **${targetLabel}**`
+            : `## Research: ZIP **${search.zip}**`,
+          !isAddress && intentLabel ? `Filter focus: **${intentLabel}**` : null,
           "",
-          `I looked up inventory (read-only — **the map was not updated**).`,
-          `Matched about **${totalAvailable.toLocaleString()}** properties; showing the top **${results.length}** by score.`,
+          isAddress
+            ? `I looked up that street address (read-only — **the map was not updated**).`
+            : `I looked up inventory (read-only — **the map was not updated**).`,
+          isAddress
+            ? results.length > 0
+              ? `Matched **${results.length}** property.`
+              : "No property matched that address."
+            : `Matched about **${totalAvailable.toLocaleString()}** properties; showing the top **${results.length}** by score.`,
         ]
           .filter(Boolean)
           .join("\n"),
@@ -260,10 +292,16 @@ export async function runDemoAgentTurn(input: {
           const score = p.score != null ? `score ${p.score}` : null;
           return `${i + 1}. **${p.address ?? p.attomId}**${p.city ? `, ${p.city}` : ""} — ${value}${score ? ` · ${score}` : ""}${flags ? ` · ${flags}` : ""}`;
         });
-        parts.push(["### Top properties", ...bullets].join("\n"));
+        parts.push(
+          [isAddress ? "### Property" : "### Top properties", ...bullets].join(
+            "\n",
+          ),
+        );
       } else {
         parts.push(
-          "No properties matched that query in the current data set. Try another ZIP or broaden the distress filters.",
+          isAddress
+            ? "No property matched that full address. Check spelling or try City, ST ZIP after the street."
+            : "No properties matched that query in the current data set. Try another ZIP or broaden the distress filters.",
         );
       }
 
@@ -273,7 +311,9 @@ export async function runDemoAgentTurn(input: {
           formatSwitchToAgentSuggestion(
             actionAsk ?? {
               action: "save leads or update the map with these results",
-              example: `Find ${intentLabel ?? "homes"} in ${search.zip} and show them on the map`,
+              example: isAddress
+                ? `Show ${targetLabel} on the map`
+                : `Find ${intentLabel ?? "homes"} in ${search.zip} and show them on the map`,
             },
           ),
         );
@@ -288,11 +328,13 @@ export async function runDemoAgentTurn(input: {
       }
     } else {
       parts.push(
-        [
-          `Searched **${search.zip}**`,
-          intentLabel ? ` with **${intentLabel}** mode` : "",
-          `. Found **${results.length}** properties (universe ~${totalAvailable.toLocaleString()}). Map updated.`,
-        ].join(""),
+        isAddress
+          ? `Looked up **${targetLabel}**. Found **${results.length}** match${results.length === 1 ? "" : "es"}. Map updated.`
+          : [
+              `Searched **${search.zip}**`,
+              intentLabel ? ` with **${intentLabel}** mode` : "",
+              `. Found **${results.length}** properties (universe ~${totalAvailable.toLocaleString()}). Map updated.`,
+            ].join(""),
       );
     }
 

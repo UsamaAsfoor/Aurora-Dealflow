@@ -1,4 +1,9 @@
-import type { PropertySearchFilters, PropertySearchParams, SearchMode } from "@aurora/core";
+import {
+  looksLikeStreetAddress,
+  type PropertySearchFilters,
+  type PropertySearchParams,
+  type SearchMode,
+} from "@aurora/core";
 import type { LucideIcon } from "lucide-react";
 import {
   Building2,
@@ -574,9 +579,6 @@ export type DetectedSearchKind =
   | "city_hint"
   | "unknown";
 
-const STREET_SUFFIX =
-  /\b(st|street|ave|avenue|rd|road|dr|drive|ln|lane|blvd|boulevard|ct|court|way|cir|circle|hwy|highway|pkwy|parkway|ter|terrace|pl|place|trl|trail)\b/i;
-
 /** Detect whether free-text input is a ZIP, street address, city, or county. */
 export function detectSearchInput(raw: string): {
   kind: DetectedSearchKind;
@@ -592,11 +594,8 @@ export function detectSearchInput(raw: string): {
     return { kind: "zip_partial", label: "ZIP code" };
   }
 
-  // Street number + name (e.g. "742 Evergreen Terrace, Springfield, IL")
-  const looksLikeAddress =
-    /^\d+\s+[A-Za-z0-9]/.test(q) ||
-    (/\d/.test(q) && STREET_SUFFIX.test(q) && q.length >= 8);
-  if (looksLikeAddress) {
+  // Street number + name (e.g. "742 Evergreen Terrace, Springfield, IL 62704")
+  if (looksLikeStreetAddress(q)) {
     return { kind: "address", label: "Street address" };
   }
 

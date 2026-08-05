@@ -15,11 +15,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" data-theme="studio" suppressHydrationWarning>
+    <html lang="en" data-theme="studio" data-scheme="dark" suppressHydrationWarning>
       <head>
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem('aurora_theme');if(t==='studio'||t==='command'||t==='signal')document.documentElement.dataset.theme=t;}catch(e){}})();`,
+            __html: `(function(){try{var ids=['studio','command','signal','midnight','ember','daybreak','ledger','coast','frost','atlas'];var light={daybreak:1,ledger:1,coast:1,frost:1,atlas:1};var t=localStorage.getItem('aurora_theme');if(ids.indexOf(t)===-1)t='studio';var s=light[t]?'light':'dark';document.documentElement.dataset.theme=t;document.documentElement.dataset.scheme=s;document.documentElement.style.colorScheme=s;}catch(e){}})();`,
           }}
         />
       </head>
